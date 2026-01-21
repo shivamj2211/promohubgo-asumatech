@@ -13,7 +13,6 @@ import {
 import { useState, useEffect, useRef } from 'react'
 import { apiFetch } from '@/lib/api'
 import JourneyStepper from '@/components/JourneyStepper'
-import { getRouteForStep } from '@/config/onboardingFlow'
 
 type CitySuggestion = { city: string; state: string }
 
@@ -43,8 +42,6 @@ export default function Location() {
   const [selectedOfficeName, setSelectedOfficeName] = useState('')
   const [useManualOffice, setUseManualOffice] = useState(false)
   const [manualOfficeName, setManualOfficeName] = useState('')
-  const [backHref, setBackHref] = useState('/profile')
-
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [cityDialogOpen, setCityDialogOpen] = useState(false)
 
@@ -65,9 +62,10 @@ export default function Location() {
         }
         if (loc.fullAddress) setFullAddress(loc.fullAddress)
         if (loc.officename) setSelectedOfficeName(loc.officename)
-        setBackHref(getRouteForStep(user.role, 1) || '/profile')
       } catch {
-        if (active) setBackHref('/profile')
+        if (active) {
+          return
+        }
       }
     })()
     return () => {

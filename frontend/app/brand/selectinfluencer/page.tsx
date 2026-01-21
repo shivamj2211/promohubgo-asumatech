@@ -37,7 +37,7 @@ export default function InfluencerTypePage() {
         setCategories(items)
         if (existing.length) {
           const normalized = existing.map((c: any) => String(c.key))
-          const mapped = normalized.map((key) => {
+          const mapped = normalized.map((key: string) => {
             const match = items.find(
               (opt: any) =>
                 String(opt.value).toLowerCase() === key.toLowerCase() ||

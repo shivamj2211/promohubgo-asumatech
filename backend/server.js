@@ -13,6 +13,8 @@ const valuesRouter = require("./routes/values");
 const adminRouter = require("./routes/admin");
 const listingsRouter = require("./routes/listings");
 const profileRouter = require("./routes/profile");
+const publicProfilesRouter = require("./routes/publicProfiles");
+const contactRouter = require("./routes/contact");
 
 const app = express();
 
@@ -58,6 +60,8 @@ app.use("/api/values", valuesRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/listings", listingsRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/public", publicProfilesRouter);
+app.use("/api/contact", contactRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {

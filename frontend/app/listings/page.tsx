@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { TopNav } from '@/components/top-nav'
 import { SiteFooter } from '@/components/footer/site-footer'
 import { apiFetch } from '@/lib/api'
 import { fetchValues } from '@/lib/value-cache'
-import Link from "next/link";
+import Link from 'next/link'
 
 type ListingItem = {
   id: string
@@ -41,7 +40,6 @@ const getInitials = (name: string) =>
     .join('') || 'U'
 
 export default function Listings() {
-  const router = useRouter()
   const [listingType, setListingType] = useState<'influencer' | 'brand'>('influencer')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -118,16 +116,6 @@ export default function Listings() {
       return acc
     }, {})
   }, [categoryOptions])
-
-  const handleContact = (item: ListingItem) => {
-    const segment = item.type.toLowerCase()
-    router.push(`/listings/${segment}/${item.id}?contact=1`)
-  }
-
-  const handleView = (item: ListingItem) => {
-    const segment = item.type.toLowerCase()
-    router.push(`/listings/${segment}/${item.id}`)
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-stone-50 to-emerald-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-900 text-slate-900 dark:text-zinc-100">
@@ -323,19 +311,21 @@ export default function Listings() {
                   </div>
 
                   <div className="px-6 pb-6 flex gap-3">
-                 <Link
-  href={`/creator/${listing.id}`}
-  className="inline-flex items-center justify-center rounded-xl px-4 py-2 border"
->
-  View Profile
-</Link>
+                 
+              <Link
+                href={`/creator/${listing.id}`}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              >
+                View Profile
+              </Link>
 
-<Link
-  href={`/contact/${listing.id}`}
-  className="inline-flex items-center justify-center rounded-xl px-4 py-2 bg-indigo-600 text-white"
->
-  Contact
-</Link>
+              <Link
+                href={`/contact/${listing.id}`}
+                className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              >
+                Contact
+              </Link>
+
                   </div>
                 </div>
               )

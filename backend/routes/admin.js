@@ -37,6 +37,157 @@ async function logAudit(req, action, details) {
   }
 }
 
+function normalizePair(a, b) {
+  return a < b ? [a, b] : [b, a];
+}
+
+async function ensureThread(db, userA, userB) {
+  const [a, b] = normalizePair(userA, userB);
+  const existing = await db.query(
+    `SELECT id FROM contact_threads WHERE user_a_id = $1 AND user_b_id = $2`,
+    [a, b]
+  );
+  if (existing.rows.length) return existing.rows[0].id;
+
+  const id = `thread_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  await db.query(
+    `
+      INSERT INTO contact_threads (id, user_a_id, user_b_id, created_at, updated_at, last_message_at)
+      VALUES ($1, $2, $3, NOW(), NOW(), NULL)
+    `,
+    [id, a, b]
+  );
+  return id;
+}
+
+// Admin Requests Inbox (Contact Requests)
+router.get("/contact-requests", async (req, res) => {
+  try {
+    const status = String(req.query.status || "pending").toLowerCase();
+    if (!["pending", "approved", "rejected"].includes(status)) {
+      return res.status(400).json({ ok: false, error: "Invalid status" });
+    }
+
+    const { rows } = await pool.query(
+      `
+        SELECT
+          cr.id,
+          cr.message,
+          cr.status,
+          cr.created_at,
+          fu.id AS from_id,
+          fu.name AS from_name,
+          fu.username AS from_username,
+          fu.email AS from_email,
+          fu.role AS from_role,
+          tu.id AS to_id,
+          tu.name AS to_name,
+          tu.username AS to_username,
+          tu.email AS to_email,
+          tu.role AS to_role
+        FROM contact_requests cr
+        JOIN users fu ON fu.id = cr.from_user_id
+        JOIN users tu ON tu.id = cr.to_user_id
+        WHERE cr.status = $1
+        ORDER BY cr.created_at DESC
+      `,
+      [status]
+    );
+
+    const data = rows.map((row) => ({
+      id: row.id,
+      message: row.message,
+      status: row.status,
+      createdAt: row.created_at,
+      fromUser: {
+        id: row.from_id,
+        name: row.from_name || row.from_username || row.from_email || "User",
+        role: row.from_role,
+      },
+      toUser: {
+        id: row.to_id,
+        name: row.to_name || row.to_username || row.to_email || "User",
+        role: row.to_role,
+      },
+    }));
+
+    return res.json({ ok: true, data });
+  } catch (e) {
+    console.error("GET /api/admin/contact-requests ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+router.post("/contact-requests/:id/approve", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = String(req.params.id || "");
+    if (!id) return res.status(400).json({ ok: false, error: "Invalid id" });
+
+    await client.query("BEGIN");
+    const requestRes = await client.query(
+      `SELECT from_user_id, to_user_id, status FROM contact_requests WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!requestRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "Request not found" });
+    }
+
+    const request = requestRes.rows[0];
+    if (request.status !== "pending") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Request already handled" });
+    }
+
+    const threadId = await ensureThread(client, request.from_user_id, request.to_user_id);
+
+    await client.query(
+      `
+        UPDATE contact_requests
+        SET status = 'approved', handled_by = $2, handled_at = NOW()
+        WHERE id = $1
+      `,
+      [id, req.user.id]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, threadId });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("POST /api/admin/contact-requests/:id/approve ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+
+router.post("/contact-requests/:id/reject", async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    if (!id) return res.status(400).json({ ok: false, error: "Invalid id" });
+
+    const result = await pool.query(
+      `
+        UPDATE contact_requests
+        SET status = 'rejected', handled_by = $2, handled_at = NOW()
+        WHERE id = $1 AND status = 'pending'
+        RETURNING id
+      `,
+      [id, req.user.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, error: "Request not found" });
+    }
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("POST /api/admin/contact-requests/:id/reject ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 // Dynamic values admin
 router.get("/values/:role", async (req, res) => {
   try {
@@ -98,6 +249,44 @@ router.post("/values/:role", async (req, res) => {
   } catch (e) {
     console.error("POST /api/admin/values ERROR:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+// ✅ Admin Requests Inbox (Contact Requests)
+router.get("/requests", async (req, res) => {
+  try {
+    // Contact requests are orders with totalPrice = 0 (as created in profile.js)
+    const rows = await prisma.order.findMany({
+      where: { totalPrice: 0 },
+      orderBy: { createdAt: "desc" },
+      include: {
+        listing: { select: { id: true, title: true, type: true } },
+        buyer: { select: { id: true, full_name: true, email: true } },
+        seller: {
+          include: {
+            user: { select: { id: true, full_name: true, email: true } },
+          },
+        },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, content: true, createdAt: true, senderId: true },
+        },
+      },
+    });
+
+    const data = rows.map((o) => ({
+      id: o.id,
+      status: o.status,
+      createdAt: o.createdAt,
+      listing: o.listing,
+      buyer: o.buyer,
+      sellerUser: o.seller?.user || null,
+      lastMessage: o.messages?.[0] || null,
+    }));
+
+    res.json({ ok: true, requests: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.message || "Server error" });
   }
 });
 

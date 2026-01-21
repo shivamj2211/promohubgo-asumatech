@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { apiFetch } from '@/lib/api'
 import { TopNav } from '@/components/top-nav'
 
@@ -27,6 +28,15 @@ type AdminUser = {
   createdAt?: string
 }
 
+type ContactRequest = {
+  id: string
+  message: string
+  status: string
+  createdAt: string
+  fromUser: { id: string; name: string; role?: string | null }
+  toUser: { id: string; name: string; role?: string | null }
+}
+
 export default function AdminPage() {
   const [me, setMe] = useState<{ isAdmin?: boolean; isLocked?: boolean } | null>(null)
   const [loadingMe, setLoadingMe] = useState(true)
@@ -50,6 +60,11 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersError, setUsersError] = useState('')
   const [userQuery, setUserQuery] = useState('')
+
+  const [requests, setRequests] = useState<ContactRequest[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(false)
+  const [requestsError, setRequestsError] = useState('')
+  const [lastApprovedThread, setLastApprovedThread] = useState('')
 
   useEffect(() => {
     let active = true
@@ -196,6 +211,42 @@ export default function AdminPage() {
     }
   }
 
+  async function loadRequests() {
+    try {
+      setRequestsLoading(true)
+      setRequestsError('')
+      const res = await apiFetch('/api/admin/contact-requests?status=pending')
+      const items = Array.isArray(res?.data) ? res.data : []
+      setRequests(items)
+    } catch (e: any) {
+      setRequestsError(e?.message || 'Failed to load contact requests')
+    } finally {
+      setRequestsLoading(false)
+    }
+  }
+
+  async function approveRequest(id: string) {
+    try {
+      const res = await apiFetch(`/api/admin/contact-requests/${id}/approve`, {
+        method: 'POST',
+      })
+      setRequests((prev) => prev.filter((item) => item.id !== id))
+      const threadId = res?.threadId
+      if (threadId) setLastApprovedThread(threadId)
+    } catch (e: any) {
+      setRequestsError(e?.message || 'Failed to approve request')
+    }
+  }
+
+  async function rejectRequest(id: string) {
+    try {
+      await apiFetch(`/api/admin/contact-requests/${id}/reject`, { method: 'POST' })
+      setRequests((prev) => prev.filter((item) => item.id !== id))
+    } catch (e: any) {
+      setRequestsError(e?.message || 'Failed to reject request')
+    }
+  }
+
   function updateUserField(id: string, field: keyof AdminUser, value: any) {
     setUsers((prev) =>
       prev.map((user) => (user.id === id ? { ...user, [field]: value } : user))
@@ -233,6 +284,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return
     loadUsers()
+    loadRequests()
   }, [isAdmin])
 
   if (loadingMe) {
@@ -420,6 +472,74 @@ export default function AdminPage() {
 
         <section className="space-y-4">
           <div>
+            <h1 className="text-2xl font-semibold">Requests Inbox</h1>
+            <p className="text-sm text-gray-600 dark:text-zinc-400">
+              Review incoming contact requests and open chats.
+            </p>
+          </div>
+
+          {requestsError && <div className="text-sm text-red-600">{requestsError}</div>}
+          {lastApprovedThread && (
+            <div className="text-sm text-emerald-600">
+              Thread created.{' '}
+              <Link href={`/inbox/${lastApprovedThread}`} className="underline">
+                Open chat
+              </Link>
+            </div>
+          )}
+
+          <div className="border rounded-xl p-4 dark:border-zinc-800">
+            {requestsLoading ? (
+              <div className="text-sm text-gray-500 dark:text-zinc-400">
+                Loading contact requests...
+              </div>
+            ) : requests.length === 0 ? (
+              <div className="text-sm text-gray-500 dark:text-zinc-400">
+                No pending requests.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {requests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="border rounded-xl p-4 dark:border-zinc-800 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">
+                          {req.fromUser.name} - {req.toUser.name}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400">
+                          {new Date(req.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => approveRequest(req.id)}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectRequest(req.id)}
+                          className="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-600 text-xs"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700 dark:text-zinc-300 whitespace-pre-wrap">
+                      {req.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div>
             <h1 className="text-2xl font-semibold">User Management</h1>
             <p className="text-sm text-gray-600 dark:text-zinc-400">
               Lock accounts, update user details, or remove accounts.
@@ -516,6 +636,7 @@ export default function AdminPage() {
                     >
                       Delete
                     </button>
+                    
                   </div>
                 </div>
               ))}

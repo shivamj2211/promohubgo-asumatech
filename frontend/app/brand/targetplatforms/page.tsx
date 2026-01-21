@@ -36,7 +36,7 @@ export default function PlatformTargetPage() {
         setOptions(items)
         if (existing.length) {
           const normalized = existing.map((p: any) => String(p.key))
-          const mapped = normalized.map((key) => {
+          const mapped = normalized.map((key: string) => {
             const match = items.find(
               (opt: any) =>
                 String(opt.value).toLowerCase() === key.toLowerCase() ||

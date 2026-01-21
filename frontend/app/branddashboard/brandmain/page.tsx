@@ -9,7 +9,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiFetch } from '@/lib/api'
 import { fetchValues } from '@/lib/value-cache'
 
 export default function BrandPage() {
