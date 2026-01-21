@@ -1,0 +1,443 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  name                 String?
+  email                String?  @unique
+  passwordHash         String?  @map("password_hash")
+  emailVerified        DateTime?
+  image                String?
+  bio                  String?
+  city                 String?
+  isSeller             Boolean  @default(false)
+  isAdmin              Boolean  @default(false)
+  isLocked             Boolean  @default(false) 
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  username             String?  @unique
+  phone                String?
+  countryCode          String?
+  onboardingStep       Int?     @default(0)
+  role                 UserRole?
+  onboardingCompleted  Boolean  @default(false)
+
+  // Relations (existing)
+  accounts  Account[]
+  sessions  Session[]
+  seller    Seller?
+  orders    Order[]    @relation("buyer")
+  messages  Message[]
+  favorites Favorite[]
+  reviews   Review[]
+  reports   Report[]
+  auditLogs AuditLog[] // ✅ FIX: opposite relation for AuditLog.user
+
+ 
+
+  // ✅ Onboarding relations
+  influencerProfile    InfluencerProfile?
+  influencerCategories InfluencerCategory[]
+  influencerSocials    InfluencerSocial[]
+  userLocation         UserLocation?
+
+  brandProfile    BrandProfile?
+  brandCategories BrandCategory[]
+  brandPlatforms  BrandPlatform[]
+  influencerMedia InfluencerMedia[]
+  brandMedia      BrandMedia[]
+  @@map("users")
+
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Seller {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  bio          String?
+  avatar       String?
+  rating       Float    @default(0)
+  totalReviews Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listings Listing[] // ✅ Listing now relates to Seller via sellerId
+  orders   Order[]   @relation("seller")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  listings Listing[]
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  listings ListingTag[]
+}
+
+model Listing {
+  id          String @id @default(cuid())
+  title       String
+  description String @db.Text
+  price       Float
+
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+
+  // ✅ FIX: use sellerId only (prevents duplicate FK constraint name)
+  sellerId String
+  seller   Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  image     String?
+  tags      ListingTag[]
+  status    String       @default("active") // active, inactive, archived
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  orders    Order[]
+  favorites Favorite[]
+  reviews   Review[]
+  reports   Report[]
+
+  @@index([sellerId])
+  @@index([categoryId])
+}
+
+model ListingTag {
+  id        String   @id @default(cuid())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+  tag       Tag      @relation(fields: [tagId], references: [id])
+  tagId     String
+  createdAt DateTime @default(now())
+
+  @@unique([listingId, tagId])
+}
+
+model Order {
+  id        String  @id @default(cuid())
+  listing   Listing @relation(fields: [listingId], references: [id])
+  listingId String
+
+  buyerId String
+  buyer   User   @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+
+  sellerId String
+  seller   Seller @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  status     String   @default("pending") // pending, completed, cancelled
+  totalPrice Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+}
+
+model Message {
+  id      String @id @default(cuid())
+  content String @db.Text
+
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderId String
+
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([senderId])
+}
+
+model Review {
+  id      String @id @default(cuid())
+  rating  Int // 1-5
+  comment String @db.Text
+
+  reviewer   User   @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewerId String
+
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+
+  createdAt DateTime @default(now())
+
+  // ✅ FIX: opposite relation for Report.review
+  reports Report[]
+
+  @@unique([listingId, reviewerId])
+  @@index([listingId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, listingId])
+}
+
+model Report {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  listingId String?
+
+  review   Review? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  reviewId String?
+
+  reason     String    @db.Text
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model FeatureFlag {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  action    String
+  details   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+//
+// ✅ Onboarding (NEW)
+//
+
+enum UserRole {
+  BRAND
+  INFLUENCER
+}
+
+model UserLocation {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  pincode     String?
+  district    String?
+  statename   String?
+  officename  String?
+  latitude    String?
+  longitude   String?
+  fullAddress String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([pincode])
+}
+
+model InfluencerProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  gender      String?
+  dob         String?
+  languages   String[] @default([])
+  title       String?
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InfluencerCategory {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+}
+
+model InfluencerSocial {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String
+  username  String?
+  followers String?
+  url       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@index([platform])
+}
+
+model BrandProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  hereToDo     String?
+  approxBudget String?
+  businessType String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BrandCategory {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+}
+
+model BrandPlatform {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+}
+
+// -------------------------------------------------------------
+// Media support for influencers and brands
+// These models allow us to store image metadata for profile and
+// cover images. Files themselves should be stored in object
+// storage (e.g. S3, Cloudinary, Supabase). We only store the
+// URL and type here. An enum type is used to enforce the allowed
+// variants (PROFILE or COVER) for each record. Sort order can
+// optionally be supplied so the frontend can order the images.
+
+enum InfluencerMediaType {
+  PROFILE
+  COVER
+}
+
+model InfluencerMedia {
+  id        String              @id @default(cuid())
+  userId    String
+  type      InfluencerMediaType
+  url       String
+  sortOrder Int?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum BrandMediaType {
+  PROFILE
+  COVER
+}
+
+model BrandMedia {
+  id        String         @id @default(cuid())
+  userId    String
+  type      BrandMediaType
+  url       String
+  sortOrder Int?
+  createdAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+model PincodeOffice {
+  pincode    String
+  officename String
+
+  district   String?
+  statename  String?
+  latitude   Float?
+  longitude  Float?
+
+  @@id([pincode, officename])
+  @@index([pincode])
+  @@map("pincode_offices")
+}
