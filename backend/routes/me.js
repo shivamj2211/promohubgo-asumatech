@@ -1,6 +1,8 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const { prisma } = require("../lib/prisma");
+const { canChangeUsernameOnceAfterCooldown } = require("../services/usernamePolicy");
+const { recordUsernameChange } = require("../services/usernameService");
 const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
@@ -60,10 +62,10 @@ router.get("/", requireAuth, async (req, res) => {
 router.patch("/role", requireAuth, async (req, res) => {
   const { role } = req.body || {};
   const normalized = String(role || "").toLowerCase();
-if (!["influencer", "brand"].includes(normalized)) {
-  return res.status(400).json({ ok: false, error: "Invalid role" });
-}
-const dbRole = normalized === "influencer" ? "INFLUENCER" : "BRAND";
+  if (!["influencer", "brand"].includes(normalized)) {
+    return res.status(400).json({ ok: false, error: "Invalid role" });
+  }
+  const dbRole = normalized === "influencer" ? "INFLUENCER" : "BRAND";
 
   await prisma.user.update({
     where: { id: req.user.id },
@@ -126,10 +128,14 @@ router.patch("/location", requireAuth, async (req, res) => {
 
 // Set or update the user's username.
 // PATCH /api/me/username { username: string }
+//
+// ✅ Policy:
+// - Initial set (when username is empty) is allowed anytime.
+// - After set: user can change only once, and only after 30 days from signup.
 router.patch("/username", requireAuth, async (req, res) => {
   try {
     const { username } = req.body || {};
-    if (!username) {
+    if (username === undefined || username === null) {
       return res.status(400).json({ ok: false, error: "Username is required" });
     }
 
@@ -142,6 +148,29 @@ router.patch("/username", requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: "Username may only contain lowercase letters, numbers, dots or underscores" });
     }
 
+    // Load current + evaluate policy
+    const policy = await canChangeUsernameOnceAfterCooldown(req.user.id);
+    if (!policy.ok) {
+      if (policy.reason === "USERNAME_CHANGE_LIMIT") {
+        return res.status(403).json({ ok: false, error: "You can change username only once." });
+      }
+      if (policy.reason === "USERNAME_COOLDOWN") {
+        return res.status(403).json({
+          ok: false,
+          error: `You can change username after ${policy.waitDays} day(s).`,
+          waitDays: policy.waitDays,
+        });
+      }
+      return res.status(403).json({ ok: false, error: "Username change not allowed." });
+    }
+
+    const currentUsername = policy.currentUsername ? String(policy.currentUsername).trim().toLowerCase() : null;
+
+    // No-op
+    if (currentUsername && currentUsername === trimmed) {
+      return res.json({ ok: true, username: trimmed });
+    }
+
     // Check if username exists for another user
     const existing = await prisma.user.findUnique({
       where: { username: trimmed },
@@ -151,12 +180,18 @@ router.patch("/username", requireAuth, async (req, res) => {
       return res.status(409).json({ ok: false, error: "Username already taken" });
     }
 
+    // Update
     await prisma.user.update({
       where: { id: req.user.id },
       data: { username: trimmed },
     });
 
-    res.json({ ok: true });
+    // Record history only when this was a change (not initial set)
+    if (!policy.isInitialSet && currentUsername) {
+      await recordUsernameChange(req.user.id, currentUsername, trimmed);
+    }
+
+    res.json({ ok: true, username: trimmed });
   } catch (e) {
     console.error("PATCH /api/me/username ERROR:", e);
     res.status(500).json({ ok: false, error: "Server error" });
@@ -182,14 +217,40 @@ router.patch("/", requireAuth, async (req, res) => {
     if (userPatch.countryCode !== undefined) userUpdates.countryCode = userPatch.countryCode ? String(userPatch.countryCode) : null;
 
     if (userPatch.username !== undefined) {
-      const trimmed = userPatch.username ? String(userPatch.username).trim().toLowerCase() : null;
-      if (trimmed) {
-        if (trimmed.length < 6 || trimmed.length > 18) {
-          return res.status(400).json({ ok: false, error: "Username must be between 6 and 18 characters" });
+      // Disallow clearing username via this endpoint (keeps public links stable)
+      const incoming = userPatch.username === null ? "" : String(userPatch.username);
+      const trimmed = incoming.trim().toLowerCase();
+
+      if (!trimmed) {
+        return res.status(400).json({ ok: false, error: "Username is required" });
+      }
+      if (trimmed.length < 6 || trimmed.length > 18) {
+        return res.status(400).json({ ok: false, error: "Username must be between 6 and 18 characters" });
+      }
+      if (!/^[a-z0-9._]+$/.test(trimmed)) {
+        return res.status(400).json({ ok: false, error: "Username may only contain lowercase letters, numbers, dots or underscores" });
+      }
+
+      // Policy enforcement (prevents bypass)
+      const policy = await canChangeUsernameOnceAfterCooldown(req.user.id);
+      if (!policy.ok) {
+        if (policy.reason === "USERNAME_CHANGE_LIMIT") {
+          return res.status(403).json({ ok: false, error: "You can change username only once." });
         }
-        if (!/^[a-z0-9._]+$/.test(trimmed)) {
-          return res.status(400).json({ ok: false, error: "Username may only contain lowercase letters, numbers, dots or underscores" });
+        if (policy.reason === "USERNAME_COOLDOWN") {
+          return res.status(403).json({
+            ok: false,
+            error: `You can change username after ${policy.waitDays} day(s).`,
+            waitDays: policy.waitDays,
+          });
         }
+        return res.status(403).json({ ok: false, error: "Username change not allowed." });
+      }
+
+      const currentUsername = policy.currentUsername ? String(policy.currentUsername).trim().toLowerCase() : null;
+
+      // Uniqueness check (only if changing or initial set)
+      if (!currentUsername || currentUsername !== trimmed) {
         const existing = await prisma.user.findUnique({
           where: { username: trimmed },
           select: { id: true },
@@ -198,7 +259,16 @@ router.patch("/", requireAuth, async (req, res) => {
           return res.status(409).json({ ok: false, error: "Username already taken" });
         }
       }
+
       userUpdates.username = trimmed;
+
+      // Record history later (after successful update)
+      // We'll attach to req for reuse below
+      req._usernameChange = {
+        isInitialSet: Boolean(policy.isInitialSet),
+        oldUsername: currentUsername,
+        newUsername: trimmed,
+      };
     }
 
     if (Object.keys(userUpdates).length) {
@@ -206,6 +276,11 @@ router.patch("/", requireAuth, async (req, res) => {
         where: { id: req.user.id },
         data: userUpdates,
       });
+
+      // ✅ Record username history if username was changed through this endpoint
+      if (req._usernameChange && req._usernameChange.oldUsername && !req._usernameChange.isInitialSet) {
+        await recordUsernameChange(req.user.id, req._usernameChange.oldUsername, req._usernameChange.newUsername);
+      }
     }
 
     if (userLocation) {
@@ -260,18 +335,18 @@ router.patch("/", requireAuth, async (req, res) => {
     }
 
     if (Array.isArray(influencerSocials)) {
-      await prisma.influencerSocial.deleteMany({ where: { userId: req.user.id } });
-      const items = influencerSocials
+      const arr = influencerSocials
         .map((s) => ({
-          platform: String(s.platform || "").toLowerCase(),
-          username: s.username ? String(s.username) : null,
-          followers: s.followers ? String(s.followers) : null,
-          url: s.url ? String(s.url) : null,
+          platform: s?.platform ? String(s.platform) : "",
+          username: s?.username ? String(s.username) : null,
+          url: s?.url ? String(s.url) : null,
         }))
         .filter((s) => s.platform);
-      if (items.length) {
+
+      await prisma.influencerSocial.deleteMany({ where: { userId: req.user.id } });
+      if (arr.length) {
         await prisma.influencerSocial.createMany({
-          data: items.map((s) => ({ ...s, userId: req.user.id })),
+          data: arr.map((s) => ({ userId: req.user.id, ...s })),
           skipDuplicates: true,
         });
       }
@@ -279,13 +354,21 @@ router.patch("/", requireAuth, async (req, res) => {
 
     if (brandProfile) {
       const payload = {
+        businessType: brandProfile.businessType ?? null,
         hereToDo: brandProfile.hereToDo ?? null,
         approxBudget: brandProfile.approxBudget ?? null,
-        businessType: brandProfile.businessType ?? null,
+        platforms: Array.isArray(brandProfile.platforms)
+          ? brandProfile.platforms.map((p) => String(p))
+          : undefined,
       };
+
       await prisma.brandProfile.upsert({
         where: { userId: req.user.id },
-        create: { userId: req.user.id, ...payload },
+        create: {
+          userId: req.user.id,
+          ...payload,
+          platforms: payload.platforms || [],
+        },
         update: payload,
       });
     }
@@ -312,66 +395,11 @@ router.patch("/", requireAuth, async (req, res) => {
       }
     }
 
-    return res.json({ ok: true });
+    res.json({ ok: true });
   } catch (e) {
     console.error("PATCH /api/me ERROR:", e);
-    return res.status(500).json({ ok: false, error: "Server error" });
+    res.status(500).json({ ok: false, error: "Server error" });
   }
 });
-
-router.post("/change-password", requireAuth, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body || {};
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ ok: false, error: "Current and new password are required" });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { passwordHash: true },
-    });
-    if (!user?.passwordHash) {
-      return res.status(400).json({ ok: false, error: "Password login not enabled" });
-    }
-
-    const ok = await bcrypt.compare(String(currentPassword), user.passwordHash);
-    if (!ok) return res.status(401).json({ ok: false, error: "Invalid current password" });
-
-    const hash = await bcrypt.hash(String(newPassword), 10);
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { passwordHash: hash },
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("POST /api/me/change-password ERROR:", e);
-    return res.status(500).json({ ok: false, error: "Server error" });
-  }
-});
-
-router.post("/change-email", requireAuth, async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    if (!email) return res.status(400).json({ ok: false, error: "Email is required" });
-
-    const lower = String(email).toLowerCase();
-    const existing = await prisma.user.findUnique({ where: { email: lower }, select: { id: true } });
-    if (existing && existing.id !== req.user.id) {
-      return res.status(409).json({ ok: false, error: "Email already exists" });
-    }
-
-    await prisma.user.update({
-      where: { id: req.user.id },
-      data: { email: lower },
-    });
-
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("POST /api/me/change-email ERROR:", e);
-    return res.status(500).json({ ok: false, error: "Server error" });
-  }
-});
-
 
 module.exports = router;

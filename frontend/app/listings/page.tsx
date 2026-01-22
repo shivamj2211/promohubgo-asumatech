@@ -47,7 +47,7 @@ export default function Listings() {
   const [loadingListings, setLoadingListings] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState<ValueOption[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
-
+  
   useEffect(() => {
     let active = true
     ;(async () => {
@@ -310,23 +310,31 @@ export default function Listings() {
                     ))}
                   </div>
 
-                  <div className="px-6 pb-6 flex gap-3">
-                 
-              <Link
-                href={`/creator/${listing.id}`}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
-              >
-                View Profile
-              </Link>
+                    <div className="px-6 pb-6 flex gap-3">
+                    {(() => {
+                      // ✅ Prefer username in URL, fallback to id (so it never breaks)
+                      const slug = (listing.username && String(listing.username).trim()) ? String(listing.username).trim() : listing.id;
 
-              <Link
-                href={`/contact/${listing.id}`}
-                className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-              >
-                Contact
-              </Link>
+                      return (
+                        <>
+                          <Link
+                            href={`/creator/${slug}`}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                          >
+                            View Profile
+                          </Link>
 
+                          <Link
+                            href={`/contact/${slug}`}
+                            className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                          >
+                            Contact
+                          </Link>
+                        </>
+                      );
+                    })()}
                   </div>
+
                 </div>
               )
             })}

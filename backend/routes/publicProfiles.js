@@ -11,38 +11,195 @@ function buildLocationLabel(location) {
   return statename || district || null;
 }
 
-async function resolveUserId(id) {
-  const influencerRes = await pool.query(
-    `SELECT "userId" FROM "InfluencerProfile" WHERE id = $1`,
-    [id]
-  );
-  if (influencerRes.rows.length) return { userId: influencerRes.rows[0].userId, type: "INFLUENCER" };
+/**
+ * ✅ DB-safe query helper:
+ * - If a column is missing (ex: is_premium), retry with fallback SQL.
+ * - If table is missing, retry with fallback SQL.
+ */
+async function safeQuery(primarySql, primaryParams, fallbackSql, fallbackParams) {
+  try {
+    return await pool.query(primarySql, primaryParams);
+  } catch (e) {
+    if (!fallbackSql) throw e;
+    return await pool.query(fallbackSql, fallbackParams ?? primaryParams);
+  }
+}
 
-  const brandRes = await pool.query(
-    `SELECT "userId" FROM "BrandProfile" WHERE id = $1`,
-    [id]
-  );
-  if (brandRes.rows.length) return { userId: brandRes.rows[0].userId, type: "BRAND" };
+/**
+ * ✅ Resolve identifier -> userId
+ * Accepts:
+ * - username (current)
+ * - old username (username_history)
+ * - influencerProfileId / brandProfileId
+ * - userId (uuid)
+ *
+ * Returns:
+ * { userId, type, shouldRedirect, canonicalUsername }
+ */
+async function resolveUserIdentifier(identifier) {
+  const clean = String(identifier || "").trim();
+  const lower = clean.toLowerCase();
+  if (!clean) {
+    return { userId: null, type: null, shouldRedirect: false, canonicalUsername: null };
+  }
 
-  return { userId: id, type: null };
+  // 1) Try CURRENT username in users (case-insensitive)
+  try {
+    const byUsernameUsers = await pool.query(
+      `SELECT id, username, role FROM users WHERE LOWER(username) = $1 LIMIT 1`,
+      [lower]
+    );
+    if (byUsernameUsers.rows.length) {
+      const u = byUsernameUsers.rows[0];
+      return {
+        userId: u.id,
+        type: String(u.role || "").toUpperCase() || null,
+        shouldRedirect: false,
+        canonicalUsername: u.username || null,
+      };
+    }
+  } catch {}
+
+  // 2) Try CURRENT username in "User" (case-insensitive)
+  try {
+    const byUsernamePrisma = await pool.query(
+      `SELECT id, username, role FROM "User" WHERE LOWER(username) = $1 LIMIT 1`,
+      [lower]
+    );
+    if (byUsernamePrisma.rows.length) {
+      const u = byUsernamePrisma.rows[0];
+      return {
+        userId: u.id,
+        type: String(u.role || "").toUpperCase() || null,
+        shouldRedirect: false,
+        canonicalUsername: u.username || null,
+      };
+    }
+  } catch {}
+
+  // 3) Try OLD username in username_history (case-insensitive) -> get userId -> fetch current username
+  try {
+    const hist = await pool.query(
+      `SELECT user_id FROM username_history WHERE LOWER(old_username) = $1 LIMIT 1`,
+      [lower]
+    );
+
+    if (hist.rows.length) {
+      const userId = hist.rows[0].user_id;
+
+      let canonical = null;
+      let role = null;
+
+      // fetch canonical current username from users or "User"
+      try {
+        const u1 = await pool.query(
+          `SELECT username, role FROM users WHERE id = $1 LIMIT 1`,
+          [userId]
+        );
+        if (u1.rows.length) {
+          canonical = u1.rows[0].username || null;
+          role = u1.rows[0].role || null;
+        }
+      } catch {}
+
+      if (!canonical) {
+        try {
+          const u2 = await pool.query(
+            `SELECT username, role FROM "User" WHERE id = $1 LIMIT 1`,
+            [userId]
+          );
+          if (u2.rows.length) {
+            canonical = u2.rows[0].username || null;
+            role = u2.rows[0].role || null;
+          }
+        } catch {}
+      }
+
+      return {
+        userId,
+        type: String(role || "").toUpperCase() || null,
+        shouldRedirect: Boolean(canonical && canonical.toLowerCase() !== lower),
+        canonicalUsername: canonical || null,
+      };
+    }
+  } catch {}
+
+  // 4) Try profileId -> userId (InfluencerProfile / BrandProfile)
+  try {
+    const influencerRes = await pool.query(
+      `SELECT "userId" FROM "InfluencerProfile" WHERE id = $1`,
+      [clean]
+    );
+    if (influencerRes.rows.length) {
+      return {
+        userId: influencerRes.rows[0].userId,
+        type: "INFLUENCER",
+        shouldRedirect: false,
+        canonicalUsername: null,
+      };
+    }
+  } catch {}
+
+  try {
+    const brandRes = await pool.query(
+      `SELECT "userId" FROM "BrandProfile" WHERE id = $1`,
+      [clean]
+    );
+    if (brandRes.rows.length) {
+      return {
+        userId: brandRes.rows[0].userId,
+        type: "BRAND",
+        shouldRedirect: false,
+        canonicalUsername: null,
+      };
+    }
+  } catch {}
+
+  // 5) Fallback: treat as userId (uuid)
+  return { userId: clean, type: null, shouldRedirect: false, canonicalUsername: null };
+}
+
+async function loadUserRow(userId) {
+  /**
+   * ✅ Works in both cases:
+   * 1) Raw SQL table: users(id, name, username, email, role, is_premium)
+   * 2) Prisma baseline table: "User"(id, name, username, email, role) and maybe no is_premium
+   */
+  const q1 = `SELECT id, name, username, email, role, is_premium FROM users WHERE id = $1`;
+  const q1Fallback = `SELECT id, name, username, email, role, false as is_premium FROM users WHERE id = $1`;
+  const q2 = `SELECT id, name, username, email, role, false as is_premium FROM "User" WHERE id = $1`;
+
+  try {
+    const res1 = await safeQuery(q1, [userId], q1Fallback, [userId]);
+    if (res1.rows.length) return res1.rows[0];
+  } catch {}
+
+  try {
+    const res2 = await pool.query(q2, [userId]);
+    if (res2.rows.length) return res2.rows[0];
+  } catch {}
+
+  return null;
 }
 
 async function buildPublicProfile(userId, preferredType) {
-  const userRes = await pool.query(
-    `SELECT id, name, username, email, role, is_premium FROM users WHERE id = $1`,
-    [userId]
-  );
-  if (!userRes.rows.length) return null;
+  const user = await loadUserRow(userId);
+  if (!user) return null;
 
-  const user = userRes.rows[0];
   const role = preferredType || String(user.role || "").toUpperCase();
   if (!["INFLUENCER", "BRAND"].includes(role)) return null;
 
-  const locationRes = await pool.query(
-    `SELECT district, statename, officename, fullAddress, pincode FROM "UserLocation" WHERE "userId" = $1`,
-    [userId]
-  );
-  const location = locationRes.rows[0] || null;
+  // Location is optional — if table exists, good; else ignore.
+  let location = null;
+  try {
+    const locationRes = await pool.query(
+      `SELECT district, statename, officename, fullAddress, pincode FROM "UserLocation" WHERE "userId" = $1`,
+      [userId]
+    );
+    location = locationRes.rows[0] || null;
+  } catch {
+    location = null;
+  }
   const locationLabel = buildLocationLabel(location);
 
   if (role === "INFLUENCER") {
@@ -98,6 +255,13 @@ async function buildPublicProfile(userId, preferredType) {
       cover: mediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
     };
 
+    const platforms = (profile.platforms || profile.languages || []) || [];
+    const maxFollowers = socialsRes.rows.reduce((acc, r) => {
+      const v = r.followers ? String(r.followers) : null;
+      if (!v) return acc;
+      return acc || v;
+    }, null);
+
     return {
       ok: true,
       type: "influencer",
@@ -110,43 +274,28 @@ async function buildPublicProfile(userId, preferredType) {
         isPremium: Boolean(user.is_premium),
       },
       profile: {
-        ...profile,
+        title: profile.title || null,
+        description: profile.description || null,
         categories,
         socials,
         media,
         locationLabel,
+        platforms: platforms || [],
       },
       stats: {
-        platforms: socials.length,
-        followers: socials[0]?.followers || null,
+        platforms: socialsRes.rows.length ? new Set(socialsRes.rows.map((s) => s.platform)).size : 0,
+        followers: maxFollowers || null,
       },
     };
   }
 
-  const [profileRes, categoriesRes, platformsRes, mediaRes] = await Promise.all([
+  // BRAND
+  const [brandProfileRes, brandMediaRes] = await Promise.all([
     pool.query(
       `
-        SELECT "hereToDo" AS here_to_do, "approxBudget" AS approx_budget, "businessType" AS business_type
+        SELECT business_type, title, description, here_to_do, approx_budget, platforms
         FROM "BrandProfile"
         WHERE "userId" = $1
-      `,
-      [userId]
-    ),
-    pool.query(
-      `
-        SELECT key
-        FROM "BrandCategory"
-        WHERE "userId" = $1
-        ORDER BY key ASC
-      `,
-      [userId]
-    ),
-    pool.query(
-      `
-        SELECT key
-        FROM "BrandPlatform"
-        WHERE "userId" = $1
-        ORDER BY key ASC
       `,
       [userId]
     ),
@@ -161,12 +310,10 @@ async function buildPublicProfile(userId, preferredType) {
     ),
   ]);
 
-  const profile = profileRes.rows[0] || {};
-  const categories = categoriesRes.rows.map((row) => row.key).filter(Boolean);
-  const platforms = platformsRes.rows.map((row) => row.key).filter(Boolean);
+  const profile = brandProfileRes.rows[0] || {};
   const media = {
-    profile: mediaRes.rows.filter((row) => row.type === "PROFILE").map((row) => row.url),
-    cover: mediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
+    profile: brandMediaRes.rows.filter((row) => row.type === "PROFILE").map((row) => row.url),
+    cover: brandMediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
   };
 
   return {
@@ -181,14 +328,17 @@ async function buildPublicProfile(userId, preferredType) {
       isPremium: Boolean(user.is_premium),
     },
     profile: {
-      ...profile,
-      categories,
-      platforms,
+      title: profile.title || null,
+      description: profile.description || null,
+      business_type: profile.business_type || null,
+      here_to_do: profile.here_to_do || null,
+      approx_budget: profile.approx_budget || null,
+      platforms: profile.platforms || [],
+      socials: [],
       media,
       locationLabel,
     },
     stats: {
-      platforms: platforms.length,
       businessType: profile.business_type || null,
       budgetRange: profile.approx_budget || null,
     },
@@ -209,15 +359,23 @@ router.get("/profile/:userId", async (req, res) => {
   }
 });
 
-router.get("/influencers/:id", async (req, res) => {
+router.get("/influencers/:identifier", async (req, res) => {
   try {
-    const id = String(req.params.id || "").trim();
-    if (!id) return res.status(400).json({ ok: false, error: "Invalid id" });
+    const identifier = String(req.params.identifier || "").trim();
+    if (!identifier) return res.status(400).json({ ok: false, error: "Invalid identifier" });
 
-    const resolved = await resolveUserId(id);
+    const resolved = await resolveUserIdentifier(identifier);
+    if (!resolved.userId) return res.status(400).json({ ok: false, error: "Invalid identifier" });
+
     const data = await buildPublicProfile(resolved.userId, resolved.type);
     if (!data) return res.status(404).json({ ok: false, error: "Profile not found" });
-    return res.json(data);
+
+    return res.json({
+      ...data,
+      canonicalUsername: resolved.canonicalUsername || data?.user?.username || null,
+      shouldRedirect: Boolean(resolved.shouldRedirect),
+      requested: identifier,
+    });
   } catch (e) {
     console.error("GET /api/public/influencers ERROR:", e);
     return res.status(500).json({ ok: false, error: "Server error" });

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 type Social = { platform: string; username?: string | null; url?: string | null; followers?: string | null };
 type Media = { profile?: string[]; cover?: string[] };
@@ -40,26 +41,48 @@ type PublicProfile = {
 export default function CreatorProfilePage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<PublicProfile | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await apiFetch(`/api/public/influencers/${params.id}`);
-        if (!alive) return;
-        setData(res as PublicProfile);
-      } catch (e) {
-        console.error(e);
-        if (!alive) return;
-        setData(null);
-      } finally {
-        if (alive) setLoading(false);
+  let alive = true;
+  setLoading(true);
+  setErrorMsg(null);
+
+  (async () => {
+    try {
+      // ✅ Backend now returns redirect info if username is old
+      const res = await apiFetch(`/api/public/influencers/${params.id}`);
+      if (!alive) return;
+
+      const p = res as any;
+
+      // ✅ AUTO-REDIRECT: old username → new username
+      if (
+        p?.shouldRedirect &&
+        p?.canonicalUsername &&
+        p?.canonicalUsername !== params.id
+      ) {
+        router.replace(`/creator/${p.canonicalUsername}`);
+        return; // ⛔ stop rendering old URL
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [params.id]);
+
+      // ✅ Normal render
+      setData(p as PublicProfile);
+    } catch (e: any) {
+      console.error(e);
+      if (!alive) return;
+      setData(null);
+      setErrorMsg(e?.message || "Failed to load profile.");
+    } finally {
+      if (alive) setLoading(false);
+    }
+  })();
+
+  return () => {
+    alive = false;
+  };
+}, [params.id, router]);
 
   const profileName = data?.user?.name || "Profile";
   const profileTitle = data?.profile?.title || data?.profile?.business_type || "Profile";
@@ -90,6 +113,9 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
       <div className="min-h-screen bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
         <div className="mx-auto max-w-6xl px-4 py-10">
           <p className="text-sm text-slate-600 dark:text-zinc-300">Profile not found.</p>
+          {errorMsg ? (
+            <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">{errorMsg}</p>
+          ) : null}
           <Link className="mt-4 inline-block underline" href="/listings">
             Back to listings
           </Link>
@@ -103,18 +129,14 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-              {profileName}
-            </h1>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{profileName}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-zinc-300">
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide dark:bg-zinc-900">
                 {data.type === "influencer" ? "Influencer" : "Brand"}
               </span>
               {location ? <span>{location}</span> : null}
               {data.user.username ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-zinc-900">
-                  @{data.user.username}
-                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-zinc-900">@{data.user.username}</span>
               ) : null}
             </div>
           </div>
@@ -172,9 +194,7 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm text-slate-500 dark:text-zinc-400">
-                      No categories shared.
-                    </span>
+                    <span className="text-sm text-slate-500 dark:text-zinc-400">No categories shared.</span>
                   )}
                 </div>
               </div>
@@ -224,12 +244,7 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
                       {social.url ? (
                         <>
                           {" "}
-                          <a
-                            href={social.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-emerald-600 hover:underline"
-                          >
+                          <a href={social.url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">
                             visit
                           </a>
                         </>
@@ -242,9 +257,7 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
               </div>
             </div>
 
-            <div className="text-center text-xs text-slate-500 dark:text-zinc-500">
-              Mobile friendly - Dark/Light ready
-            </div>
+           
           </div>
         </div>
       </div>
