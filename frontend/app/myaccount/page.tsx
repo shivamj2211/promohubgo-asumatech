@@ -1,0 +1,282 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+
+type ThreadItem = {
+  id: string;
+  otherUser: { id: string; name: string; role?: string | null };
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+};
+
+type Me = {
+  id: string;
+  name?: string | null;
+  username?: string | null;
+  email?: string | null;
+  role?: string | null;
+  isPremium?: boolean | null;
+};
+
+const sections = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "analytics", label: "Analytics" },
+  { id: "inbox", label: "Inbox" },
+  { id: "settings", label: "Account Settings" },
+  { id: "membership", label: "Manage Membership" },
+] as const;
+
+export default function MyAccountPage() {
+  const [active, setActive] = useState<(typeof sections)[number]["id"]>("dashboard");
+  const [me, setMe] = useState<Me | null>(null);
+  const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let activeRequest = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const [meRes, threadsRes] = await Promise.all([
+          apiFetch("/api/me"),
+          apiFetch("/api/threads"),
+        ]);
+        if (!activeRequest) return;
+        setMe(meRes?.user || null);
+        setThreads(Array.isArray(threadsRes?.data) ? threadsRes.data : []);
+      } catch {
+        if (activeRequest) {
+          setMe(null);
+          setThreads([]);
+        }
+      } finally {
+        if (activeRequest) setLoading(false);
+      }
+    })();
+    return () => {
+      activeRequest = false;
+    };
+  }, []);
+
+  const recentThreads = useMemo(() => threads.slice(0, 4), [threads]);
+  const threadCount = threads.length;
+
+  return (
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
+      <TopNav />
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <aside className="w-full lg:w-64 shrink-0">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+              <p className="text-xs uppercase tracking-widest text-slate-400">My Account</p>
+              <div className="mt-4 space-y-1">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    onClick={() => setActive(section.id)}
+                    className={`w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
+                      active === section.id
+                        ? "bg-emerald-600 text-white"
+                        : "text-slate-600 hover:bg-slate-50 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                    }`}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section className="flex-1 space-y-6">
+            {loading ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
+                Loading your account...
+              </div>
+            ) : null}
+
+            {active === "dashboard" ? (
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+                  <h1 className="text-2xl font-extrabold">Dashboard</h1>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
+                    Welcome back {me?.name || me?.username || "there"}. Here is a quick snapshot.
+                  </p>
+                  <div className="mt-6 grid gap-4 md:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                      <p className="text-xs uppercase tracking-widest text-slate-400">Threads</p>
+                      <p className="mt-2 text-2xl font-extrabold">{threadCount}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                      <p className="text-xs uppercase tracking-widest text-slate-400">Role</p>
+                      <p className="mt-2 text-2xl font-extrabold">{me?.role || "N/A"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+                      <p className="text-xs uppercase tracking-widest text-slate-400">Premium</p>
+                      <p className="mt-2 text-2xl font-extrabold">
+                        {me?.isPremium ? "Active" : "Free"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-extrabold">Recent Activity</h2>
+                    <Link
+                      href="/inbox"
+                      className="text-sm font-semibold text-emerald-600 hover:underline"
+                    >
+                      Open inbox
+                    </Link>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {recentThreads.length ? (
+                      recentThreads.map((thread) => (
+                        <div
+                          key={thread.id}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-zinc-800"
+                        >
+                          <div>
+                            <p className="font-semibold">{thread.otherUser.name}</p>
+                            <p className="text-xs text-slate-500 dark:text-zinc-500 truncate">
+                              {thread.lastMessage || "No messages yet"}
+                            </p>
+                          </div>
+                          <Link
+                            href={`/inbox/${thread.id}`}
+                            className="text-xs font-semibold text-emerald-600 hover:underline"
+                          >
+                            View
+                          </Link>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-slate-500 dark:text-zinc-400">
+                        No recent conversations yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {active === "analytics" ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950 space-y-4">
+                <h2 className="text-lg font-extrabold">Analytics</h2>
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  Engagement metrics update as your profile receives activity.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-zinc-800">
+                    <p className="text-xs uppercase tracking-widest text-slate-400">Views</p>
+                    <p className="mt-2 text-xl font-extrabold">N/A</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-zinc-800">
+                    <p className="text-xs uppercase tracking-widest text-slate-400">Clicks</p>
+                    <p className="mt-2 text-xl font-extrabold">N/A</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-zinc-800">
+                    <p className="text-xs uppercase tracking-widest text-slate-400">
+                      Contact Requests
+                    </p>
+                    <p className="mt-2 text-xl font-extrabold">{threadCount}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4 dark:border-zinc-800">
+                    <p className="text-xs uppercase tracking-widest text-slate-400">
+                      Response Time
+                    </p>
+                    <p className="mt-2 text-xl font-extrabold">N/A</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {active === "inbox" ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-extrabold">Inbox</h2>
+                  <Link
+                    href="/myaccount/inbox"
+                    className="text-sm font-semibold text-emerald-600 hover:underline"
+                  >
+                    Open full inbox
+                  </Link>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {threads.length ? (
+                    threads.map((thread) => (
+                      <Link
+                        key={thread.id}
+                        href={`/myaccount/inbox/${thread.id}`}
+                        className="block rounded-xl border border-slate-200 px-4 py-3 text-sm hover:bg-slate-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                      >
+                        <p className="font-semibold">{thread.otherUser.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-zinc-500 truncate">
+                          {thread.lastMessage || "No messages yet"}
+                        </p>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-zinc-400">
+                      Your inbox is empty.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {active === "settings" ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950 space-y-4">
+                <h2 className="text-lg font-extrabold">Account Settings</h2>
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  Update your profile, contact information, and onboarding data.
+                </p>
+                <div className="rounded-xl border border-slate-200 p-4 text-sm dark:border-zinc-800">
+                  <p>
+                    <span className="font-semibold">Email:</span> {me?.email || "N/A"}
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold">Username:</span> {me?.username || "N/A"}
+                  </p>
+                </div>
+                <Link
+                  href="/account"
+                  className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                >
+                  Edit account settings
+                </Link>
+              </div>
+            ) : null}
+
+            {active === "membership" ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950 space-y-4">
+                <h2 className="text-lg font-extrabold">Manage Membership</h2>
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  Unlock premium messaging and priority placement.
+                </p>
+                <div className="rounded-xl border border-slate-200 p-4 text-sm dark:border-zinc-800">
+                  <p>
+                    <span className="font-semibold">Status:</span>{" "}
+                    {me?.isPremium ? "Premium active" : "Free tier"}
+                  </p>
+                </div>
+                {!me?.isPremium ? (
+                  <button className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                    Upgrade to Premium
+                  </button>
+                ) : (
+                  <button className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-zinc-800">
+                    Manage billing
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

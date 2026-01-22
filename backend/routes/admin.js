@@ -37,25 +37,20 @@ async function logAudit(req, action, details) {
   }
 }
 
-function normalizePair(a, b) {
-  return a < b ? [a, b] : [b, a];
-}
-
-async function ensureThread(db, userA, userB) {
-  const [a, b] = normalizePair(userA, userB);
+async function ensureThread(db, requestId, userA, userB) {
   const existing = await db.query(
-    `SELECT id FROM contact_threads WHERE user_a_id = $1 AND user_b_id = $2`,
-    [a, b]
+    `SELECT id FROM contact_threads WHERE request_id = $1`,
+    [requestId]
   );
   if (existing.rows.length) return existing.rows[0].id;
 
   const id = `thread_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   await db.query(
     `
-      INSERT INTO contact_threads (id, user_a_id, user_b_id, created_at, updated_at, last_message_at)
-      VALUES ($1, $2, $3, NOW(), NOW(), NULL)
+      INSERT INTO contact_threads (id, request_id, user_a_id, user_b_id, created_at, updated_at, last_message_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL)
     `,
-    [id, a, b]
+    [id, requestId, userA, userB]
   );
   return id;
 }
@@ -64,7 +59,7 @@ async function ensureThread(db, userA, userB) {
 router.get("/contact-requests", async (req, res) => {
   try {
     const status = String(req.query.status || "pending").toLowerCase();
-    if (!["pending", "approved", "rejected"].includes(status)) {
+    if (!["pending", "accepted", "rejected"].includes(status)) {
       return res.status(400).json({ ok: false, error: "Invalid status" });
     }
 
@@ -72,9 +67,12 @@ router.get("/contact-requests", async (req, res) => {
       `
         SELECT
           cr.id,
+          cr.listing_id,
           cr.message,
           cr.status,
           cr.created_at,
+          cr.handled_by,
+          cr.handled_at,
           fu.id AS from_id,
           fu.name AS from_name,
           fu.username AS from_username,
@@ -99,6 +97,9 @@ router.get("/contact-requests", async (req, res) => {
       message: row.message,
       status: row.status,
       createdAt: row.created_at,
+      listingId: row.listing_id,
+      handledBy: row.handled_by,
+      handledAt: row.handled_at,
       fromUser: {
         id: row.from_id,
         name: row.from_name || row.from_username || row.from_email || "User",
@@ -140,12 +141,12 @@ router.post("/contact-requests/:id/approve", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Request already handled" });
     }
 
-    const threadId = await ensureThread(client, request.from_user_id, request.to_user_id);
+    const threadId = await ensureThread(client, id, request.from_user_id, request.to_user_id);
 
     await client.query(
       `
         UPDATE contact_requests
-        SET status = 'approved', handled_by = $2, handled_at = NOW()
+        SET status = 'accepted', handled_by = $2, handled_at = NOW()
         WHERE id = $1
       `,
       [id, req.user.id]
@@ -185,6 +186,58 @@ router.post("/contact-requests/:id/reject", async (req, res) => {
   } catch (e) {
     console.error("POST /api/admin/contact-requests/:id/reject ERROR:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+router.patch("/contact-requests/:id", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = String(req.params.id || "");
+    if (!id) return res.status(400).json({ ok: false, error: "Invalid id" });
+
+    const status = String(req.body?.status || "").toLowerCase();
+    if (!["accepted", "rejected"].includes(status)) {
+      return res.status(400).json({ ok: false, error: "Invalid status" });
+    }
+
+    await client.query("BEGIN");
+    const requestRes = await client.query(
+      `SELECT from_user_id, to_user_id, status FROM contact_requests WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!requestRes.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ ok: false, error: "Request not found" });
+    }
+
+    const request = requestRes.rows[0];
+    if (request.status !== "pending") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ ok: false, error: "Request already handled" });
+    }
+
+    let threadId = null;
+    if (status === "accepted") {
+      threadId = await ensureThread(client, id, request.from_user_id, request.to_user_id);
+    }
+
+    await client.query(
+      `
+        UPDATE contact_requests
+        SET status = $2, handled_by = $3, handled_at = NOW()
+        WHERE id = $1
+      `,
+      [id, status, req.user.id]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ ok: true, threadId });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    console.error("PATCH /api/admin/contact-requests/:id ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  } finally {
+    client.release();
   }
 });
 

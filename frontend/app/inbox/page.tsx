@@ -30,7 +30,7 @@ export default function InboxPage() {
       try {
         setLoading(true);
         setError("");
-        const res = await apiFetch("/api/contact/threads");
+        const res = await apiFetch("/api/threads");
         if (!active) return;
         const items = Array.isArray(res?.data) ? res.data : [];
         setThreads(items);

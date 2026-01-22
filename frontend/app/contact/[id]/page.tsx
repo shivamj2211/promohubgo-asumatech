@@ -13,17 +13,22 @@ export default function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState<null | { ok: boolean; text: string }>(null);
   const [toName, setToName] = useState("");
+  const [resolvedUserId, setResolvedUserId] = useState("");
 
   useEffect(() => {
     let active = true;
     if (!id) return;
     (async () => {
       try {
-        const res = await apiFetch(`/api/public/profile/${id}`);
+        const res = await apiFetch(`/api/public/influencers/${id}`);
         if (!active) return;
         setToName(res?.user?.name || res?.user?.username || res?.user?.email || "");
+        setResolvedUserId(res?.user?.id || id);
       } catch {
-        if (active) setToName("");
+        if (active) {
+          setToName("");
+          setResolvedUserId(id);
+        }
       }
     })();
     return () => {
@@ -38,9 +43,13 @@ export default function ContactPage() {
 
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/contact/request`, {
+      const res = await apiFetch(`/api/contact-requests`, {
         method: "POST",
-        body: JSON.stringify({ toUserId: id, message: message.trim() }),
+        body: JSON.stringify({
+          toUserId: resolvedUserId || id,
+          listingId: id,
+          message: message.trim(),
+        }),
       });
 
       if (!res?.ok) throw new Error(res?.error || "Failed");

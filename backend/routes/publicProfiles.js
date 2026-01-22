@@ -11,113 +11,46 @@ function buildLocationLabel(location) {
   return statename || district || null;
 }
 
-router.get("/profile/:userId", async (req, res) => {
-  try {
-    const userId = String(req.params.userId || "").trim();
-    if (!userId) return res.status(400).json({ ok: false, error: "Invalid userId" });
+async function resolveUserId(id) {
+  const influencerRes = await pool.query(
+    `SELECT "userId" FROM "InfluencerProfile" WHERE id = $1`,
+    [id]
+  );
+  if (influencerRes.rows.length) return { userId: influencerRes.rows[0].userId, type: "INFLUENCER" };
 
-    const userRes = await pool.query(
-      `SELECT id, name, username, email, role, is_premium FROM users WHERE id = $1`,
-      [userId]
-    );
-    if (!userRes.rows.length) return res.status(404).json({ ok: false, error: "User not found" });
+  const brandRes = await pool.query(
+    `SELECT "userId" FROM "BrandProfile" WHERE id = $1`,
+    [id]
+  );
+  if (brandRes.rows.length) return { userId: brandRes.rows[0].userId, type: "BRAND" };
 
-    const user = userRes.rows[0];
-    const role = String(user.role || "").toUpperCase();
-    if (!["INFLUENCER", "BRAND"].includes(role)) {
-      return res.status(404).json({ ok: false, error: "Profile not found" });
-    }
+  return { userId: id, type: null };
+}
 
-    const locationRes = await pool.query(
-      `SELECT district, statename, officename, fullAddress, pincode FROM "UserLocation" WHERE "userId" = $1`,
-      [userId]
-    );
-    const location = locationRes.rows[0] || null;
-    const locationLabel = buildLocationLabel(location);
+async function buildPublicProfile(userId, preferredType) {
+  const userRes = await pool.query(
+    `SELECT id, name, username, email, role, is_premium FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!userRes.rows.length) return null;
 
-    if (role === "INFLUENCER") {
-      const [profileRes, categoriesRes, socialsRes, mediaRes] = await Promise.all([
-        pool.query(
-          `
-            SELECT gender, dob, title, description, languages
-            FROM "InfluencerProfile"
-            WHERE "userId" = $1
-          `,
-          [userId]
-        ),
-        pool.query(
-          `
-            SELECT key
-            FROM "InfluencerCategory"
-            WHERE "userId" = $1
-            ORDER BY key ASC
-          `,
-          [userId]
-        ),
-        pool.query(
-          `
-            SELECT platform, username, url, followers
-            FROM "InfluencerSocial"
-            WHERE "userId" = $1
-            ORDER BY "createdAt" ASC
-          `,
-          [userId]
-        ),
-        pool.query(
-          `
-            SELECT type, url
-            FROM "InfluencerMedia"
-            WHERE "userId" = $1
-            ORDER BY "sortOrder" ASC NULLS LAST, "createdAt" ASC
-          `,
-          [userId]
-        ),
-      ]);
+  const user = userRes.rows[0];
+  const role = preferredType || String(user.role || "").toUpperCase();
+  if (!["INFLUENCER", "BRAND"].includes(role)) return null;
 
-      const profile = profileRes.rows[0] || {};
-      const categories = categoriesRes.rows.map((row) => row.key).filter(Boolean);
-      const socials = socialsRes.rows.map((row) => ({
-        platform: row.platform,
-        username: row.username,
-        url: row.url,
-        followers: row.followers,
-      }));
+  const locationRes = await pool.query(
+    `SELECT district, statename, officename, fullAddress, pincode FROM "UserLocation" WHERE "userId" = $1`,
+    [userId]
+  );
+  const location = locationRes.rows[0] || null;
+  const locationLabel = buildLocationLabel(location);
 
-      const media = {
-        profile: mediaRes.rows.filter((row) => row.type === "PROFILE").map((row) => row.url),
-        cover: mediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
-      };
-
-      return res.json({
-        ok: true,
-        type: "influencer",
-        user: {
-          id: user.id,
-          name: user.name || user.username || user.email || "Creator",
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          isPremium: Boolean(user.is_premium),
-        },
-        profile: {
-          ...profile,
-          categories,
-          socials,
-          media,
-          locationLabel,
-        },
-        stats: {
-          platforms: socials.length,
-          followers: socials[0]?.followers || null,
-        },
-      });
-    }
-
-    const [profileRes, categoriesRes, platformsRes, mediaRes] = await Promise.all([
+  if (role === "INFLUENCER") {
+    const [profileRes, categoriesRes, socialsRes, mediaRes] = await Promise.all([
       pool.query(
         `
-          SELECT "hereToDo" AS here_to_do, "approxBudget" AS approx_budget, "businessType" AS business_type
-          FROM "BrandProfile"
+          SELECT gender, dob, title, description, languages
+          FROM "InfluencerProfile"
           WHERE "userId" = $1
         `,
         [userId]
@@ -125,7 +58,7 @@ router.get("/profile/:userId", async (req, res) => {
       pool.query(
         `
           SELECT key
-          FROM "BrandCategory"
+          FROM "InfluencerCategory"
           WHERE "userId" = $1
           ORDER BY key ASC
         `,
@@ -133,17 +66,17 @@ router.get("/profile/:userId", async (req, res) => {
       ),
       pool.query(
         `
-          SELECT key
-          FROM "BrandPlatform"
+          SELECT platform, username, url, followers
+          FROM "InfluencerSocial"
           WHERE "userId" = $1
-          ORDER BY key ASC
+          ORDER BY "createdAt" ASC
         `,
         [userId]
       ),
       pool.query(
         `
           SELECT type, url
-          FROM "BrandMedia"
+          FROM "InfluencerMedia"
           WHERE "userId" = $1
           ORDER BY "sortOrder" ASC NULLS LAST, "createdAt" ASC
         `,
@@ -153,18 +86,24 @@ router.get("/profile/:userId", async (req, res) => {
 
     const profile = profileRes.rows[0] || {};
     const categories = categoriesRes.rows.map((row) => row.key).filter(Boolean);
-    const platforms = platformsRes.rows.map((row) => row.key).filter(Boolean);
+    const socials = socialsRes.rows.map((row) => ({
+      platform: row.platform,
+      username: row.username,
+      url: row.url,
+      followers: row.followers,
+    }));
+
     const media = {
       profile: mediaRes.rows.filter((row) => row.type === "PROFILE").map((row) => row.url),
       cover: mediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
     };
 
-    return res.json({
+    return {
       ok: true,
-      type: "brand",
+      type: "influencer",
       user: {
         id: user.id,
-        name: user.name || user.username || user.email || "Brand",
+        name: user.name || user.username || user.email || "Creator",
         username: user.username,
         email: user.email,
         role: user.role,
@@ -173,18 +112,114 @@ router.get("/profile/:userId", async (req, res) => {
       profile: {
         ...profile,
         categories,
-        platforms,
+        socials,
         media,
         locationLabel,
       },
       stats: {
-        platforms: platforms.length,
-        businessType: profile.business_type || null,
-        budgetRange: profile.approx_budget || null,
+        platforms: socials.length,
+        followers: socials[0]?.followers || null,
       },
-    });
+    };
+  }
+
+  const [profileRes, categoriesRes, platformsRes, mediaRes] = await Promise.all([
+    pool.query(
+      `
+        SELECT "hereToDo" AS here_to_do, "approxBudget" AS approx_budget, "businessType" AS business_type
+        FROM "BrandProfile"
+        WHERE "userId" = $1
+      `,
+      [userId]
+    ),
+    pool.query(
+      `
+        SELECT key
+        FROM "BrandCategory"
+        WHERE "userId" = $1
+        ORDER BY key ASC
+      `,
+      [userId]
+    ),
+    pool.query(
+      `
+        SELECT key
+        FROM "BrandPlatform"
+        WHERE "userId" = $1
+        ORDER BY key ASC
+      `,
+      [userId]
+    ),
+    pool.query(
+      `
+        SELECT type, url
+        FROM "BrandMedia"
+        WHERE "userId" = $1
+        ORDER BY "sortOrder" ASC NULLS LAST, "createdAt" ASC
+      `,
+      [userId]
+    ),
+  ]);
+
+  const profile = profileRes.rows[0] || {};
+  const categories = categoriesRes.rows.map((row) => row.key).filter(Boolean);
+  const platforms = platformsRes.rows.map((row) => row.key).filter(Boolean);
+  const media = {
+    profile: mediaRes.rows.filter((row) => row.type === "PROFILE").map((row) => row.url),
+    cover: mediaRes.rows.filter((row) => row.type === "COVER").map((row) => row.url),
+  };
+
+  return {
+    ok: true,
+    type: "brand",
+    user: {
+      id: user.id,
+      name: user.name || user.username || user.email || "Brand",
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      isPremium: Boolean(user.is_premium),
+    },
+    profile: {
+      ...profile,
+      categories,
+      platforms,
+      media,
+      locationLabel,
+    },
+    stats: {
+      platforms: platforms.length,
+      businessType: profile.business_type || null,
+      budgetRange: profile.approx_budget || null,
+    },
+  };
+}
+
+router.get("/profile/:userId", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+    if (!userId) return res.status(400).json({ ok: false, error: "Invalid userId" });
+
+    const data = await buildPublicProfile(userId, null);
+    if (!data) return res.status(404).json({ ok: false, error: "Profile not found" });
+    return res.json(data);
   } catch (e) {
     console.error("GET /api/public/profile ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+router.get("/influencers/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ ok: false, error: "Invalid id" });
+
+    const resolved = await resolveUserId(id);
+    const data = await buildPublicProfile(resolved.userId, resolved.type);
+    if (!data) return res.status(404).json({ ok: false, error: "Profile not found" });
+    return res.json(data);
+  } catch (e) {
+    console.error("GET /api/public/influencers ERROR:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });

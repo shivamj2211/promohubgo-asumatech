@@ -101,6 +101,13 @@ export function TopNav() {
                   </div>
                 </div>
                 <Link
+                  href="/myaccount"
+                  onClick={() => setOpen(false)}
+                  className="block px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"
+                >
+                  My account
+                </Link>
+                <Link
                   href="/account"
                   onClick={() => setOpen(false)}
                   className="block px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"

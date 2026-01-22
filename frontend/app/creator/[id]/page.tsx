@@ -45,7 +45,7 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
     let alive = true;
     (async () => {
       try {
-        const res = await apiFetch(`/api/public/profile/${params.id}`);
+        const res = await apiFetch(`/api/public/influencers/${params.id}`);
         if (!alive) return;
         setData(res as PublicProfile);
       } catch (e) {
@@ -128,7 +128,7 @@ export default function CreatorProfilePage({ params }: { params: { id: string } 
             </Link>
 
             <Link
-              href={`/contact/${data.user.id}`}
+              href={`/contact/${params.id}`}
               className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-emerald-700"
             >
               Contact

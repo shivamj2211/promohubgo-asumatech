@@ -5,11 +5,13 @@ import { apiFetch } from "@/lib/api";
 
 type ReqRow = {
   id: string;
-  from_user_id: string;
-  to_user_id: string;
   message: string;
-  status: "new" | "read" | "resolved";
-  created_at: string;
+  status: "pending" | "accepted" | "rejected";
+  createdAt: string;
+  listingId?: string | null;
+  handledAt?: string | null;
+  fromUser: { id: string; name: string; role?: string | null };
+  toUser: { id: string; name: string; role?: string | null };
 };
 
 export default function AdminRequestsPage() {
@@ -21,9 +23,9 @@ export default function AdminRequestsPage() {
     setErr("");
     setLoading(true);
     try {
-      const res = await apiFetch(`/api/admin/contact-requests`, { method: "GET" });
+      const res = await apiFetch(`/api/admin/contact-requests?status=pending`, { method: "GET" });
       if (!res?.ok) throw new Error(res?.error || "Failed to load");
-      setRows(res.items || []);
+      setRows(Array.isArray(res.data) ? res.data : []);
     } catch (e: any) {
       setErr(e?.message || "Error");
     } finally {
@@ -31,11 +33,11 @@ export default function AdminRequestsPage() {
     }
   }
 
-  async function mark(id: string, status: "read" | "resolved") {
+  async function mark(id: string, status: "accepted" | "rejected") {
     try {
-      const res = await apiFetch(`/api/admin/contact-requests`, {
+      const res = await apiFetch(`/api/admin/contact-requests/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({ status }),
       });
       if (!res?.ok) throw new Error(res?.error || "Failed");
       await load();
@@ -70,7 +72,7 @@ export default function AdminRequestsPage() {
 
       <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <div className="border-b border-slate-200 px-4 py-3 text-sm font-bold text-slate-900 dark:border-zinc-800 dark:text-zinc-100">
-          {loading ? "Loading..." : `Total: ${rows.length}`}
+          {loading ? "Loading..." : `Pending: ${rows.length}`}
         </div>
 
         {err ? (
@@ -90,9 +92,9 @@ export default function AdminRequestsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${
-                          r.status === "new"
+                          r.status === "pending"
                             ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
-                            : r.status === "read"
+                            : r.status === "accepted"
                             ? "bg-slate-100 text-slate-800 dark:bg-zinc-800 dark:text-zinc-200"
                             : "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200"
                         }`}
@@ -100,17 +102,22 @@ export default function AdminRequestsPage() {
                         {r.status.toUpperCase()}
                       </span>
                       <span className="text-xs text-slate-500 dark:text-zinc-500">
-                        {new Date(r.created_at).toLocaleString()}
+                        {new Date(r.createdAt).toLocaleString()}
                       </span>
                     </div>
 
                     <div className="mt-2 text-sm text-slate-700 dark:text-zinc-300">
                       <div className="break-all">
-                        <span className="font-bold">From:</span> {r.from_user_id}
+                        <span className="font-bold">From:</span> {r.fromUser.name} ({r.fromUser.id})
                       </div>
                       <div className="break-all">
-                        <span className="font-bold">To:</span> {r.to_user_id}
+                        <span className="font-bold">To:</span> {r.toUser.name} ({r.toUser.id})
                       </div>
+                      {r.listingId ? (
+                        <div className="break-all">
+                          <span className="font-bold">Listing:</span> {r.listingId}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100">
@@ -120,16 +127,16 @@ export default function AdminRequestsPage() {
 
                   <div className="flex shrink-0 gap-2 sm:flex-col sm:items-stretch">
                     <button
-                      onClick={() => mark(r.id, "read")}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                    >
-                      Mark Read
-                    </button>
-                    <button
-                      onClick={() => mark(r.id, "resolved")}
+                      onClick={() => mark(r.id, "accepted")}
                       className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
                     >
-                      Resolve
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => mark(r.id, "rejected")}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                    >
+                      Reject
                     </button>
                   </div>
                 </div>
