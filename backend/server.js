@@ -18,6 +18,7 @@ const contactRouter = require("./routes/contact");
 const contactRequestsRouter = require("./routes/contactRequests");
 const threadsRouter = require("./routes/threads");
 const supportRouter = require("./routes/support");
+const savedSearchesRouter = require("./routes/savedSearches");
 const app = express();
 
 // Basic cookie parsing middleware (avoids external dependency)
@@ -67,6 +68,7 @@ app.use("/api/contact", contactRouter);
 app.use("/api/contact-requests", contactRequestsRouter);
 app.use("/api/threads", threadsRouter);
 app.use("/api/support", supportRouter);
+app.use("/api/saved-searches", savedSearchesRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {

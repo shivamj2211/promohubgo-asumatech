@@ -20,6 +20,7 @@ function normalizeType(input) {
 
 function normalizeSort(input) {
   const value = String(input || "").toLowerCase();
+  if (value === "followers") return "followers";
   if (value === "oldest") return "oldest";
   return "newest";
 }
@@ -194,7 +195,12 @@ router.get("/", async (req, res) => {
 
       const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
       const havingClause = having.length ? `HAVING ${having.join(" AND ")}` : "";
-      const orderClause = sort === "oldest" ? `ORDER BY u."createdAt" ASC` : `ORDER BY u."createdAt" DESC`;
+      const orderClause =
+        sort === "followers"
+          ? `ORDER BY ${FOLLOWERS_NUM_EXPR} DESC NULLS LAST, u."createdAt" DESC`
+          : sort === "oldest"
+            ? `ORDER BY u."createdAt" ASC`
+            : `ORDER BY u."createdAt" DESC`;
 
       params.push(limit, offset);
 

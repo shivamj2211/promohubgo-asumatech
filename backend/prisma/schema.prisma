@@ -60,6 +60,7 @@ model User {
   brandPlatforms  BrandPlatform[]
   influencerMedia InfluencerMedia[]
   brandMedia      BrandMedia[]
+  savedSearches   SavedSearch[] // ✅ ADD THIS
 
   @@map("users")
 }
@@ -490,6 +491,24 @@ model BrandMedia {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // influencer | brand
+  name      String?
+  slug      String?
+  tags      String[] @default([])
+  params    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@map("saved_searches")
 }
 
 model PincodeOffice {
