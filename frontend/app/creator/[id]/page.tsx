@@ -5,8 +5,26 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
-type Social = { platform: string; username?: string | null; url?: string | null; followers?: string | null };
-type Media = { profile?: string[]; cover?: string[] };
+/* ================= TYPES ================= */
+
+type Social = {
+  platform: string;
+  username?: string | null;
+  url?: string | null;
+};
+
+type Media = {
+  profile?: string[];
+  cover?: string[];
+};
+
+type Package = {
+  id: string;
+  title: string;
+  platform: "instagram" | "tiktok" | "ugc";
+  price: number;
+  description?: string;
+};
 
 type PublicProfile = {
   type: "influencer" | "brand";
@@ -14,253 +32,410 @@ type PublicProfile = {
     id: string;
     name: string;
     username?: string | null;
-    email?: string | null;
-    role?: string | null;
-    isPremium?: boolean;
   };
   profile: {
-    title?: string | null;
     description?: string | null;
     categories?: string[];
     socials?: Social[];
     media?: Media;
     locationLabel?: string | null;
-    here_to_do?: string | null;
-    approx_budget?: string | null;
-    business_type?: string | null;
-    platforms?: string[];
   };
   stats?: {
     platforms?: number | null;
     followers?: string | null;
-    businessType?: string | null;
-    budgetRange?: string | null;
   };
 };
 
-export default function CreatorProfilePage({ params }: { params: { id: string } }) {
-  const [loading, setLoading] = useState(true);
+/* ================= PAGE ================= */
+
+export default function CreatorProfilePage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const [data, setData] = useState<PublicProfile | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  const [activePlatform, setActivePlatform] =
+    useState<"all" | "instagram" | "tiktok" | "ugc">("all");
+
+  const [selectedPackage, setSelectedPackage] =
+    useState<Package | null>(null);
+
   const router = useRouter();
 
+  /* ================= FETCH ================= */
+
   useEffect(() => {
-  let alive = true;
-  setLoading(true);
-  setErrorMsg(null);
-
-  (async () => {
-    try {
-      // ✅ Backend now returns redirect info if username is old
-      const res = await apiFetch(`/api/public/influencers/${params.id}`);
-      if (!alive) return;
-
-      const p = res as any;
-
-      // ✅ AUTO-REDIRECT: old username → new username
-      if (
-        p?.shouldRedirect &&
-        p?.canonicalUsername &&
-        p?.canonicalUsername !== params.id
-      ) {
-        router.replace(`/creator/${p.canonicalUsername}`);
-        return; // ⛔ stop rendering old URL
+    let alive = true;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/public/influencers/${params.id}`);
+        if (!alive) return;
+        setData(res);
+      } catch {
+        setData(null);
+      } finally {
+        if (alive) setLoading(false);
       }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [params.id]);
 
-      // ✅ Normal render
-      setData(p as PublicProfile);
-    } catch (e: any) {
-      console.error(e);
-      if (!alive) return;
-      setData(null);
-      setErrorMsg(e?.message || "Failed to load profile.");
-    } finally {
-      if (alive) setLoading(false);
-    }
-  })();
+  /* ================= WISHLIST ================= */
 
-  return () => {
-    alive = false;
+  useEffect(() => {
+    const savedList = JSON.parse(localStorage.getItem("wishlist") || "[]");
+    setSaved(savedList.includes(params.id));
+  }, [params.id]);
+
+  const toggleSave = () => {
+    const list = JSON.parse(localStorage.getItem("wishlist") || "[]");
+    const updated = saved
+      ? list.filter((id: string) => id !== params.id)
+      : [...list, params.id];
+    localStorage.setItem("wishlist", JSON.stringify(updated));
+    setSaved(!saved);
   };
-}, [params.id, router]);
 
-  const profileName = data?.user?.name || "Profile";
-  const profileTitle = data?.profile?.title || data?.profile?.business_type || "Profile";
-  const location = data?.profile?.locationLabel || null;
+  /* ================= MEDIA ================= */
 
-  const media = useMemo(() => {
-    const profile = data?.profile?.media?.profile || [];
-    const cover = data?.profile?.media?.cover || [];
-    return [...profile, ...cover].slice(0, 4);
+  const gallery = useMemo(() => {
+    const imgs = [
+      ...(data?.profile?.media?.profile || []),
+      ...(data?.profile?.media?.cover || []),
+    ];
+    return imgs.slice(0, 6);
   }, [data]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <div className="h-8 w-52 rounded bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-            <div className="h-80 rounded-2xl bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-            <div className="h-80 rounded-2xl bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  /* ================= PACKAGES ================= */
+const isLoggedIn = Boolean(data?.user?.id);
 
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <p className="text-sm text-slate-600 dark:text-zinc-300">Profile not found.</p>
-          {errorMsg ? (
-            <p className="mt-2 text-xs text-slate-500 dark:text-zinc-400">{errorMsg}</p>
-          ) : null}
-          <Link className="mt-4 inline-block underline" href="/listings">
-            Back to listings
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  const packages: Package[] = [
+    {
+      id: "p1",
+      title: "2 Instagram Stories",
+      platform: "instagram",
+      price: 150,
+      description: "Two-slide Instagram story for your product",
+    },
+    {
+      id: "p2",
+      title: "1 Instagram Reel",
+      platform: "instagram",
+      price: 350,
+      description: "Edited reel + story mention",
+    },
+    {
+      id: "p3",
+      title: "1 TikTok Video",
+      platform: "tiktok",
+      price: 250,
+      description: "TikTok product video",
+    },
+    {
+      id: "p4",
+      title: "UGC Unboxing",
+      platform: "ugc",
+      price: 125,
+      description: "Unboxing + product showcase",
+    },
+  ];
+
+  const visiblePackages =
+    activePlatform === "all"
+      ? packages
+      : packages.filter((p) => p.platform === activePlatform);
+
+  useEffect(() => {
+    if (!selectedPackage && packages.length) {
+      setSelectedPackage(packages[0]);
+    }
+  }, [packages, selectedPackage]);
+
+  /* ================= STATES ================= */
+
+  if (loading) return <div className="p-10">Loading…</div>;
+  if (!data) return <div className="p-10">Profile not found</div>;
+
+  /* ================= UI ================= */
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{profileName}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-zinc-300">
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide dark:bg-zinc-900">
-                {data.type === "influencer" ? "Influencer" : "Brand"}
-              </span>
-              {location ? <span>{location}</span> : null}
-              {data.user.username ? (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-zinc-900">@{data.user.username}</span>
-              ) : null}
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <div className="mx-auto max-w-7xl px-4 py-6">
+
+        {/* ===== TOP BAR ===== */}
+        <div className="flex justify-between mb-6 text-sm">
+          <button onClick={() => router.back()} className="underline">
+            ← Back
+          </button>
+          <div className="flex gap-3">
+  {/* SHARE */}
+  <button
+  onClick={async () => {
+    const url = window.location.href;
+
+    if (navigator.share) {
+      await navigator.share({ url });
+    } else {
+      await navigator.clipboard.writeText(url);
+      alert("Profile link copied to clipboard");
+    }
+  }}
+  className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
+  title="Share"
+>
+  <svg
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M4 9v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9" />
+    <path d="M12 5l-3-3-3 3" />
+    <path d="M9 2v10" />
+  </svg>
+  <span className="text-sm">Share</span>
+</button>
+
+  {/* SAVE / WISHLIST */}
+  <button
+  onClick={() => {
+    if (!isLoggedIn) {
+      router.push(`/login?redirect=/creator/${params.id}`);
+      return;
+    }
+    toggleSave();
+  }}
+  className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
+  title="Save"
+>
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill={saved ? "currentColor" : "none"}
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" />
+  </svg>
+
+  <span className="text-sm">
+    {saved ? "Saved" : "Save"}
+  </span>
+</button>
+
+</div>
+
+        </div>
+
+        {/* ===== HEADER ===== */}
+<h1 className="text-3xl font-extrabold">{data.user.name}</h1>
+
+<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-zinc-400">
+  <span className="text-yellow-500 font-semibold">★ 5.0</span>
+  <span>• 9 Reviews</span>
+
+  {data.profile.locationLabel && (
+    <span>• {data.profile.locationLabel}</span>
+  )}
+
+  {data.user.username && (
+    <span>• @{data.user.username}</span>
+  )}
+</div>
+
+
+        {/* ===== GRID ===== */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+
+          {/* ========== LEFT COLUMN ========== */}
+          <div className="space-y-6">
+
+            {/* GALLERY */}
+            <div className="border rounded-2xl p-3 dark:border-zinc-800">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {gallery.length ? (
+                  gallery.map((img, i) => (
+                    <img
+                      key={img}
+                      src={img}
+                      className={`object-cover rounded-xl w-full ${
+                        i === 0 ? "col-span-2 row-span-2 h-[360px]" : "h-40"
+                      }`}
+                    />
+                  ))
+                ) : (
+                  <div className="col-span-full h-64 flex items-center justify-center text-sm text-slate-500">
+                    No images uploaded
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* ABOUT */}
+            <Section title="About">
+              {data.profile.description || "No description provided."}
+            </Section>
+
+            {/* CATEGORIES */}
+            <Section title="Categories">
+              <div className="flex flex-wrap gap-2">
+                {(data.profile.categories || []).length ? (
+                  data.profile.categories!.map((c) => (
+                    <span
+                      key={c}
+                      className="px-3 py-1 text-xs rounded-full border dark:border-zinc-700"
+                    >
+                      {c}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-slate-500">
+                    No categories shared
+                  </span>
+                )}
+              </div>
+            </Section>
+
+            {/* SOCIALS */}
+            <Section title="Socials">
+              {(data.profile.socials || []).length ? (
+                data.profile.socials!.map((s) => (
+                  <a
+                    key={s.platform}
+                    href={s.url || "#"}
+                    target="_blank"
+                    className="block underline text-sm capitalize"
+                  >
+                    {s.platform} {s.username && `(@${s.username})`}
+                  </a>
+                ))
+              ) : (
+                <span className="text-sm text-slate-500">
+                  No socials added
+                </span>
+              )}
+            </Section>
+
+            {/* PACKAGES */}
+            <Section title="Packages">
+              <div className="flex gap-4 mb-4 text-sm">
+                {["all", "instagram", "tiktok", "ugc"].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setActivePlatform(p as any)}
+                    className={`capitalize ${
+                      activePlatform === p ? "font-bold underline" : ""
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-3">
+                {visiblePackages.map((pkg) => (
+                  <button
+                    key={pkg.id}
+                    onClick={() => setSelectedPackage(pkg)}
+                    className={`w-full flex justify-between rounded-xl border p-4 dark:border-zinc-800 ${
+                      selectedPackage?.id === pkg.id
+                        ? "border-black dark:border-white"
+                        : ""
+                    }`}
+                  >
+                    <div>
+                      <p className="font-semibold">{pkg.title}</p>
+                      <p className="text-xs text-slate-500">
+                        {pkg.description}
+                      </p>
+                    </div>
+                    <span className="font-bold">${pkg.price}</span>
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            {/* FAQ */}
+            <Section title="FAQ">
+              <details>
+                <summary className="font-semibold cursor-pointer">
+                  Who is your audience?
+                </summary>
+                <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
+                  Fitness & lifestyle focused audience.
+                </p>
+              </details>
+
+              <details className="mt-3">
+                <summary className="font-semibold cursor-pointer">
+                  What brands have you worked with?
+                </summary>
+                <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
+                  Clothing, supplements, fitness brands.
+                </p>
+              </details>
+            </Section>
+
+            {/* PORTFOLIO */}
+            <Section title="Portfolio">
+              <div className="grid grid-cols-2 gap-4">
+                {gallery.slice(0, 2).map((img) => (
+                  <img
+                    key={img}
+                    src={img}
+                    className="h-56 w-full object-cover rounded-xl"
+                  />
+                ))}
+              </div>
+            </Section>
+
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              href="/listings"
-              className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-900 hover:bg-slate-50 dark:bg-zinc-950 dark:text-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-900"
-            >
-              Back
-            </Link>
+          {/* ========== RIGHT COLUMN ========== */}
+          <div className="lg:sticky lg:top-6 h-fit border rounded-2xl p-5 dark:border-zinc-800 space-y-4">
+            <p className="text-2xl font-extrabold">
+              ${selectedPackage?.price ?? 0}
+            </p>
+
+            <p className="font-semibold">{selectedPackage?.title}</p>
 
             <Link
               href={`/contact/${params.id}`}
-              className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-emerald-700"
+              className="block bg-pink-600 text-white text-center py-3 rounded-xl font-bold"
             >
-              Contact
+              Add to Cart
             </Link>
-          </div>
-        </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-          <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {media.length ? (
-                  media.map((url) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={url} src={url} alt="" className="h-40 w-full rounded-2xl object-cover" />
-                  ))
-                ) : (
-                  <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500 dark:border-zinc-800 dark:text-zinc-400">
-                    No media added yet.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-              <h2 className="text-lg font-extrabold">About</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-zinc-300">
-                {data.profile.description || "No description added yet."}
-              </p>
-
-              <div className="mt-5 border-t border-slate-200 pt-4 dark:border-zinc-800">
-                <h3 className="text-base font-extrabold">Categories</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {(data.profile.categories || []).length ? (
-                    data.profile.categories?.map((cat) => (
-                      <span
-                        key={cat}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300"
-                      >
-                        {cat}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-500 dark:text-zinc-400">No categories shared.</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:sticky lg:top-6 h-fit rounded-2xl border border-slate-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 space-y-4">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-slate-400">Profile title</p>
-              <p className="mt-1 text-xl font-extrabold">{profileTitle}</p>
-            </div>
-
-            <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-zinc-900">
-              {data.type === "influencer" ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 dark:text-zinc-400">Platforms</span>
-                    <span className="font-semibold">{data.stats?.platforms ?? 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 dark:text-zinc-400">Followers</span>
-                    <span className="font-semibold">{data.stats?.followers || "N/A"}</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 dark:text-zinc-400">Business type</span>
-                    <span className="font-semibold">{data.stats?.businessType || "Brand"}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600 dark:text-zinc-400">Budget</span>
-                    <span className="font-semibold">{data.stats?.budgetRange || "N/A"}</span>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-700 dark:text-zinc-300">Socials</h3>
-              <div className="mt-3 space-y-2">
-                {(data.profile.socials || []).length ? (
-                  data.profile.socials?.map((social) => (
-                    <div key={`${social.platform}-${social.username || ""}`} className="text-sm">
-                      <span className="font-semibold capitalize">{social.platform}</span>
-                      {social.username ? ` @${social.username}` : ""}
-                      {social.url ? (
-                        <>
-                          {" "}
-                          <a href={social.url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">
-                            visit
-                          </a>
-                        </>
-                      ) : null}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-500 dark:text-zinc-400">No socials added.</p>
-                )}
-              </div>
-            </div>
-
-           
+            <button className="underline text-sm text-slate-500">
+              Negotiate a Package
+            </button>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ================= REUSABLE ================= */
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border rounded-2xl p-5 dark:border-zinc-800 space-y-3">
+      <h2 className="font-bold text-lg">{title}</h2>
+      {children}
+    </section>
   );
 }
