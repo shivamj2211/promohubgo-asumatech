@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
@@ -23,7 +22,7 @@ type Package = {
   title: string;
   platform: "instagram" | "tiktok" | "ugc";
   price: number;
-  description?: string;
+  description?: string | null;
 };
 
 type PublicProfile = {
@@ -40,10 +39,6 @@ type PublicProfile = {
     media?: Media;
     locationLabel?: string | null;
   };
-  stats?: {
-    platforms?: number | null;
-    followers?: string | null;
-  };
 };
 
 /* ================= PAGE ================= */
@@ -53,19 +48,35 @@ export default function CreatorProfilePage({
 }: {
   params: { id: string };
 }) {
+  const router = useRouter();
+
   const [data, setData] = useState<PublicProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
+
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
 
   const [activePlatform, setActivePlatform] =
     useState<"all" | "instagram" | "tiktok" | "ugc">("all");
 
-  const [selectedPackage, setSelectedPackage] =
-    useState<Package | null>(null);
+  const [saved, setSaved] = useState(false);
+  const hasTrackedView = useRef(false);
 
-  const router = useRouter();
+  const isLoggedIn = Boolean(data?.user?.id);
 
-  /* ================= FETCH ================= */
+  const track = async (eventType: string, packageId?: string | null) => {
+    if (!packageId) return;
+    try {
+      await apiFetch("/api/analytics/track", {
+        method: "POST",
+        body: JSON.stringify({ packageId, eventType }),
+      });
+    } catch {
+      // no-op: analytics should not block UI
+    }
+  };
+
+  /* ================= FETCH PROFILE ================= */
 
   useEffect(() => {
     let alive = true;
@@ -85,6 +96,31 @@ export default function CreatorProfilePage({
     };
   }, [params.id]);
 
+  /* ================= FETCH PACKAGES ================= */
+
+  useEffect(() => {
+    if (!params.id) return;
+
+    apiFetch(`/api/influencer-packages/public/${params.id}`)
+      .then((res) => {
+        setPackages(res || []);
+      })
+      .catch(() => setPackages([]));
+  }, [params.id]);
+
+  useEffect(() => {
+    if (!selectedPackage && packages.length) {
+      setSelectedPackage(packages[0]);
+    }
+  }, [packages, selectedPackage]);
+
+  useEffect(() => {
+    if (selectedPackage && !hasTrackedView.current) {
+      hasTrackedView.current = true;
+      track("profile_view", selectedPackage.id);
+    }
+  }, [selectedPackage]);
+
   /* ================= WISHLIST ================= */
 
   useEffect(() => {
@@ -99,6 +135,9 @@ export default function CreatorProfilePage({
       : [...list, params.id];
     localStorage.setItem("wishlist", JSON.stringify(updated));
     setSaved(!saved);
+    if (!saved) {
+      track("package_save", selectedPackage?.id);
+    }
   };
 
   /* ================= MEDIA ================= */
@@ -111,54 +150,14 @@ export default function CreatorProfilePage({
     return imgs.slice(0, 6);
   }, [data]);
 
-  /* ================= PACKAGES ================= */
-const isLoggedIn = Boolean(data?.user?.id);
-
-  const packages: Package[] = [
-    {
-      id: "p1",
-      title: "2 Instagram Stories",
-      platform: "instagram",
-      price: 150,
-      description: "Two-slide Instagram story for your product",
-    },
-    {
-      id: "p2",
-      title: "1 Instagram Reel",
-      platform: "instagram",
-      price: 350,
-      description: "Edited reel + story mention",
-    },
-    {
-      id: "p3",
-      title: "1 TikTok Video",
-      platform: "tiktok",
-      price: 250,
-      description: "TikTok product video",
-    },
-    {
-      id: "p4",
-      title: "UGC Unboxing",
-      platform: "ugc",
-      price: 125,
-      description: "Unboxing + product showcase",
-    },
-  ];
-
   const visiblePackages =
     activePlatform === "all"
       ? packages
       : packages.filter((p) => p.platform === activePlatform);
 
-  useEffect(() => {
-    if (!selectedPackage && packages.length) {
-      setSelectedPackage(packages[0]);
-    }
-  }, [packages, selectedPackage]);
-
   /* ================= STATES ================= */
 
-  if (loading) return <div className="p-10">Loading…</div>;
+  if (loading) return <div className="p-10">Loading...</div>;
   if (!data) return <div className="p-10">Profile not found</div>;
 
   /* ================= UI ================= */
@@ -169,92 +168,58 @@ const isLoggedIn = Boolean(data?.user?.id);
 
         {/* ===== TOP BAR ===== */}
         <div className="flex justify-between mb-6 text-sm">
-          <button onClick={() => router.back()} className="underline">
-            ← Back
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1 underline"
+          >
+            - Back
           </button>
+
           <div className="flex gap-3">
-  {/* SHARE */}
-  <button
-  onClick={async () => {
-    const url = window.location.href;
+            {/* SHARE */}
+            <button
+              onClick={async () => {
+                const url = window.location.href;
+                if (navigator.share) {
+                  await navigator.share({ url });
+                } else {
+                  await navigator.clipboard.writeText(url);
+                  alert("Profile link copied");
+                }
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
+            >
+              <span>Share</span>
+            </button>
 
-    if (navigator.share) {
-      await navigator.share({ url });
-    } else {
-      await navigator.clipboard.writeText(url);
-      alert("Profile link copied to clipboard");
-    }
-  }}
-  className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
-  title="Share"
->
-  <svg
-    width="18"
-    height="18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M4 9v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9" />
-    <path d="M12 5l-3-3-3 3" />
-    <path d="M9 2v10" />
-  </svg>
-  <span className="text-sm">Share</span>
-</button>
-
-  {/* SAVE / WISHLIST */}
-  <button
-  onClick={() => {
-    if (!isLoggedIn) {
-      router.push(`/login?redirect=/creator/${params.id}`);
-      return;
-    }
-    toggleSave();
-  }}
-  className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
-  title="Save"
->
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill={saved ? "currentColor" : "none"}
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" />
-  </svg>
-
-  <span className="text-sm">
-    {saved ? "Saved" : "Save"}
-  </span>
-</button>
-
-</div>
-
+            {/* SAVE */}
+            <button
+              onClick={() => {
+                if (!isLoggedIn) {
+                  router.push(`/login?redirect=/creator/${params.id}`);
+                  return;
+                }
+                toggleSave();
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800"
+            >
+              <span>{saved ? "Saved" : "Save"}</span>
+            </button>
+          </div>
         </div>
 
         {/* ===== HEADER ===== */}
-<h1 className="text-3xl font-extrabold">{data.user.name}</h1>
+        <h1 className="text-3xl font-extrabold">{data.user.name}</h1>
 
-<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-zinc-400">
-  <span className="text-yellow-500 font-semibold">★ 5.0</span>
-  <span>• 9 Reviews</span>
-
-  {data.profile.locationLabel && (
-    <span>• {data.profile.locationLabel}</span>
-  )}
-
-  {data.user.username && (
-    <span>• @{data.user.username}</span>
-  )}
-</div>
-
+        <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-600 dark:text-zinc-400">
+          {data.profile.locationLabel && <span>{data.profile.locationLabel}</span>}
+          {data.user.username && <span>- @{data.user.username}</span>}
+        </div>
 
         {/* ===== GRID ===== */}
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
 
-          {/* ========== LEFT COLUMN ========== */}
+          {/* LEFT */}
           <div className="space-y-6">
 
             {/* GALLERY */}
@@ -286,41 +251,29 @@ const isLoggedIn = Boolean(data?.user?.id);
             {/* CATEGORIES */}
             <Section title="Categories">
               <div className="flex flex-wrap gap-2">
-                {(data.profile.categories || []).length ? (
-                  data.profile.categories!.map((c) => (
-                    <span
-                      key={c}
-                      className="px-3 py-1 text-xs rounded-full border dark:border-zinc-700"
-                    >
-                      {c}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-sm text-slate-500">
-                    No categories shared
+                {(data.profile.categories || []).map((c) => (
+                  <span
+                    key={c}
+                    className="px-3 py-1 text-xs rounded-full border dark:border-zinc-700"
+                  >
+                    {c}
                   </span>
-                )}
+                ))}
               </div>
             </Section>
 
             {/* SOCIALS */}
             <Section title="Socials">
-              {(data.profile.socials || []).length ? (
-                data.profile.socials!.map((s) => (
-                  <a
-                    key={s.platform}
-                    href={s.url || "#"}
-                    target="_blank"
-                    className="block underline text-sm capitalize"
-                  >
-                    {s.platform} {s.username && `(@${s.username})`}
-                  </a>
-                ))
-              ) : (
-                <span className="text-sm text-slate-500">
-                  No socials added
-                </span>
-              )}
+              {(data.profile.socials || []).map((s) => (
+                <a
+                  key={s.platform}
+                  href={s.url || "#"}
+                  target="_blank"
+                  className="block underline text-sm capitalize"
+                >
+                  {s.platform} {s.username && `(@${s.username})`}
+                </a>
+              ))}
             </Section>
 
             {/* PACKAGES */}
@@ -330,11 +283,15 @@ const isLoggedIn = Boolean(data?.user?.id);
                   <button
                     key={p}
                     onClick={() => setActivePlatform(p as any)}
-                    className={`capitalize ${
+                    className={`${
                       activePlatform === p ? "font-bold underline" : ""
                     }`}
                   >
-                    {p}
+                    {p === "instagram"
+                      ? "Instagram"
+                      : p === "tiktok"
+                      ? "TikTok"
+                      : p}
                   </button>
                 ))}
               </div>
@@ -343,8 +300,11 @@ const isLoggedIn = Boolean(data?.user?.id);
                 {visiblePackages.map((pkg) => (
                   <button
                     key={pkg.id}
-                    onClick={() => setSelectedPackage(pkg)}
-                    className={`w-full flex justify-between rounded-xl border p-4 dark:border-zinc-800 ${
+                    onClick={() => {
+                      setSelectedPackage(pkg);
+                      track("package_click", pkg.id);
+                    }}
+                    className={`w-full flex justify-between rounded-xl border p-4 ${
                       selectedPackage?.id === pkg.id
                         ? "border-black dark:border-white"
                         : ""
@@ -362,60 +322,42 @@ const isLoggedIn = Boolean(data?.user?.id);
               </div>
             </Section>
 
-            {/* FAQ */}
-            <Section title="FAQ">
-              <details>
-                <summary className="font-semibold cursor-pointer">
-                  Who is your audience?
-                </summary>
-                <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
-                  Fitness & lifestyle focused audience.
-                </p>
-              </details>
-
-              <details className="mt-3">
-                <summary className="font-semibold cursor-pointer">
-                  What brands have you worked with?
-                </summary>
-                <p className="mt-2 text-sm text-slate-600 dark:text-zinc-400">
-                  Clothing, supplements, fitness brands.
-                </p>
-              </details>
-            </Section>
-
-            {/* PORTFOLIO */}
-            <Section title="Portfolio">
-              <div className="grid grid-cols-2 gap-4">
-                {gallery.slice(0, 2).map((img) => (
-                  <img
-                    key={img}
-                    src={img}
-                    className="h-56 w-full object-cover rounded-xl"
-                  />
-                ))}
-              </div>
-            </Section>
-
           </div>
 
-          {/* ========== RIGHT COLUMN ========== */}
-          <div className="lg:sticky lg:top-6 h-fit border rounded-2xl p-5 dark:border-zinc-800 space-y-4">
+          {/* RIGHT */}
+          <div className="lg:sticky lg:top-6 h-fit border rounded-2xl p-5 space-y-4">
             <p className="text-2xl font-extrabold">
               ${selectedPackage?.price ?? 0}
             </p>
-
             <p className="font-semibold">{selectedPackage?.title}</p>
 
-            <Link
-              href={`/contact/${params.id}`}
-              className="block bg-pink-600 text-white text-center py-3 rounded-xl font-bold"
+            <button
+              onClick={async () => {
+                if (!isLoggedIn) {
+                  router.push(`/login?redirect=/creator/${params.id}`);
+                  return;
+                }
+
+                if (!selectedPackage) return;
+
+                const order = await apiFetch("/api/orders", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    packageId: selectedPackage.id,
+                  }),
+                });
+
+                await track("order_created", selectedPackage.id);
+
+                console.log("Created order:", order);
+
+                router.push(`/dashboard/orders`);
+              }}
+              className="block w-full bg-pink-600 text-white text-center py-3 rounded-xl font-bold"
             >
               Add to Cart
-            </Link>
-
-            <button className="underline text-sm text-slate-500">
-              Negotiate a Package
             </button>
+
           </div>
         </div>
       </div>
@@ -433,7 +375,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border rounded-2xl p-5 dark:border-zinc-800 space-y-3">
+    <section className="border rounded-2xl p-5 space-y-3">
       <h2 className="font-bold text-lg">{title}</h2>
       {children}
     </section>

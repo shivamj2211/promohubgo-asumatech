@@ -19,6 +19,9 @@ const contactRequestsRouter = require("./routes/contactRequests");
 const threadsRouter = require("./routes/threads");
 const supportRouter = require("./routes/support");
 const savedSearchesRouter = require("./routes/savedSearches");
+const influencerPackagesRouter = require("./routes/influencerPackages");
+const ordersRouter = require("./routes/orders");
+const analyticsRouter = require("./routes/analytics");
 const app = express();
 
 // Basic cookie parsing middleware (avoids external dependency)
@@ -69,6 +72,9 @@ app.use("/api/contact-requests", contactRequestsRouter);
 app.use("/api/threads", threadsRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/saved-searches", savedSearchesRouter);
+app.use("/api/influencer-packages", influencerPackagesRouter);
+app.use("/api/orders", ordersRouter);
+app.use("/api/analytics", analyticsRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {

@@ -9,8 +9,11 @@ const meRouter = require("./routes/me");
 const influencerRouter = require("./routes/influencer");
 const brandRouter = require("./routes/brand");
 const onboardingRouter = require("./routes/onboarding");
-
+const influencerPackagesRouter = require("./routes/influencerPackages");
+const ordersRouter = require("./routes/orders");
 const app = express();
+
+app.use("/api/influencer-packages", influencerPackages);
 
 app.use(
   cors({
@@ -31,6 +34,7 @@ app.use("/api/me", meRouter);
 app.use("/api/influencer", influencerRouter);
 app.use("/api/brand", brandRouter);
 app.use("/api/onboarding", onboardingRouter);
+app.use("/api/orders", ordersRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => console.log(`✅ Backend running on http://localhost:${PORT}`));

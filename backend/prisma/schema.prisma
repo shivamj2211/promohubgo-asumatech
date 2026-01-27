@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,56 +8,52 @@ datasource db {
 }
 
 model User {
-  id                  String    @id @default(cuid())
-  name                String?
-  email               String?   @unique
-  passwordHash        String?   @map("password_hash")
-  emailVerified       DateTime?
-  image               String?
-  bio                 String?
-  city                String?
-  isSeller            Boolean   @default(false)
-  isAdmin             Boolean   @default(false)
-  isLocked            Boolean   @default(false)
-  isPremium           Boolean   @default(false) @map("is_premium")
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  username            String?   @unique
-  phone               String?
-  countryCode         String?
-  onboardingStep      Int?      @default(0)
-  role                UserRole?
-  onboardingCompleted Boolean   @default(false)
-
-  // Relations (existing)
+  id                      String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name                    String?
+  email                   String?              @unique
+  emailVerified           DateTime?
+  image                   String?
+  bio                     String?
+  city                    String?
+  isSeller                Boolean              @default(false)
+  isAdmin                 Boolean              @default(false)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @default(now()) @updatedAt
+  username                String?              @unique
+  phone                   String?
+  countryCode             String?
+  onboardingStep          Int?                 @default(0)
+  role                    UserRole?
+  onboardingCompleted     Boolean              @default(false)
+  passwordHash            String?              @map("password_hash")
+  isLocked                Boolean              @default(false)
+  isPremium               Boolean?             @default(false) @map("is_premium")
   accounts                Account[]
-  sessions                Session[]
-  seller                  Seller?
-  orders                  Order[]          @relation("buyer")
-  messages                Message[]
+  auditLogs               AuditLog[]
+  brandCategories         BrandCategory[]
+  brandMedia              BrandMedia[]
+  brandPlatforms          BrandPlatform[]
+  brandProfile            BrandProfile?
   favorites               Favorite[]
-  reviews                 Review[]
+  influencerCategories    InfluencerCategory[]
+  influencerMedia         InfluencerMedia[]
+  influencerProfile       InfluencerProfile?
+  influencerSocials       InfluencerSocial[]
+  messages                Message[]
+  orders                  Order[]              @relation("buyer")
   reports                 Report[]
-  auditLogs               AuditLog[] // ✅ FIX: opposite relation for AuditLog.user
-  contactRequestsSent     ContactRequest[] @relation("ContactRequestFrom")
-  contactRequestsReceived ContactRequest[] @relation("ContactRequestTo")
-  contactRequestsHandled  ContactRequest[] @relation("ContactRequestHandledBy")
+  reviews                 Review[]
+  seller                  Seller?
+  sessions                Session[]
+  userLocation            UserLocation?
   threadMessages          ThreadMessage[]
-  threadsAsUserA          Thread[]         @relation("ThreadUserA")
-  threadsAsUserB          Thread[]         @relation("ThreadUserB")
-
-  // ✅ Onboarding relations
-  influencerProfile    InfluencerProfile?
-  influencerCategories InfluencerCategory[]
-  influencerSocials    InfluencerSocial[]
-  userLocation         UserLocation?
-
-  brandProfile    BrandProfile?
-  brandCategories BrandCategory[]
-  brandPlatforms  BrandPlatform[]
-  influencerMedia InfluencerMedia[]
-  brandMedia      BrandMedia[]
-  savedSearches   SavedSearch[] // ✅ ADD THIS
+  contactRequestsSent     ContactRequest[]     @relation("ContactRequestFrom")
+  contactRequestsReceived ContactRequest[]     @relation("ContactRequestTo")
+  threadsAsUserA          Thread[]             @relation("ThreadUserA")
+  threadsAsUserB          Thread[]             @relation("ThreadUserB")
+  user_identities         user_identities[]
+  influencerPackages      InfluencerPackage[]
+  influencerPackageEvents InfluencerPackageEvent[]
 
   @@map("users")
 }
@@ -71,15 +64,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -101,61 +93,53 @@ model VerificationToken {
 }
 
 model Seller {
-  id           String   @id @default(cuid())
-  userId       String   @unique
+  id           String    @id @default(cuid())
+  userId       String    @unique
   bio          String?
   avatar       String?
-  rating       Float    @default(0)
-  totalReviews Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listings Listing[] // ✅ Listing now relates to Seller via sellerId
-  orders   Order[]   @relation("seller")
+  rating       Float     @default(0)
+  totalReviews Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  listings     Listing[]
+  orders       Order[]   @relation("seller")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Category {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-
-  listings Listing[]
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  listings  Listing[]
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-
-  listings ListingTag[]
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  createdAt DateTime     @default(now())
+  listings  ListingTag[]
 }
 
 model Listing {
-  id          String @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
-  description String @db.Text
+  description String
   price       Float
-
-  category   Category @relation(fields: [categoryId], references: [id])
-  categoryId String
-
-  // ✅ FIX: use sellerId only (prevents duplicate FK constraint name)
-  sellerId String
-  seller   Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-
-  image           String?
-  tags            ListingTag[]
-  status          String           @default("active") // active, inactive, archived
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  contactRequests ContactRequest[]
-  orders          Order[]
-  favorites       Favorite[]
-  reviews         Review[]
-  reports         Report[]
+  categoryId  String
+  sellerId    String
+  image       String?
+  status      String       @default("active")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  favorites   Favorite[]
+  category    Category     @relation(fields: [categoryId], references: [id])
+  seller      Seller       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  tags        ListingTag[]
+  orders      Order[]
+  reports     Report[]
+  reviews     Review[]
 
   @@index([sellerId])
   @@index([categoryId])
@@ -163,32 +147,28 @@ model Listing {
 
 model ListingTag {
   id        String   @id @default(cuid())
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId String
-  tag       Tag      @relation(fields: [tagId], references: [id])
   tagId     String
   createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id])
 
   @@unique([listingId, tagId])
 }
 
 model Order {
-  id        String  @id @default(cuid())
-  listing   Listing @relation(fields: [listingId], references: [id])
-  listingId String
-
-  buyerId String
-  buyer   User   @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
-
-  sellerId String
-  seller   Seller @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
-
-  status     String   @default("pending") // pending, completed, cancelled
+  id         String    @id @default(cuid())
+  listingId  String
+  buyerId    String
+  sellerId   String
+  status     String    @default("pending")
   totalPrice Float
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  messages Message[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  messages   Message[]
+  buyer      User      @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  listing    Listing   @relation(fields: [listingId], references: [id])
+  seller     Seller    @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
 
   @@index([buyerId])
   @@index([sellerId])
@@ -196,36 +176,28 @@ model Order {
 }
 
 model Message {
-  id      String @id @default(cuid())
-  content String @db.Text
-
-  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  senderId String
-
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  orderId String
-
+  id        String   @id @default(cuid())
+  content   String
+  senderId  String
+  orderId   String
   createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([senderId])
 }
 
 model Review {
-  id      String @id @default(cuid())
-  rating  Int // 1-5
-  comment String @db.Text
-
-  reviewer   User   @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  rating     Int
+  comment    String
   reviewerId String
-
-  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  listingId String
-
-  createdAt DateTime @default(now())
-
-  // ✅ FIX: opposite relation for Report.review
-  reports Report[]
+  listingId  String
+  createdAt  DateTime @default(now())
+  reports    Report[]
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reviewer   User     @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
 
   @@unique([listingId, reviewerId])
   @@index([listingId])
@@ -233,30 +205,27 @@ model Review {
 
 model Favorite {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId String
   createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, listingId])
 }
 
 model Report {
-  id     String @id @default(cuid())
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  listingId String?
-
-  review   Review? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
-  reviewId String?
-
-  reason     String    @db.Text
+  id         String    @id @default(cuid())
+  userId     String
+  listingId  String?
+  reviewId   String?
+  reason     String
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
   createdAt  DateTime  @default(now())
+  listing    Listing?  @relation(fields: [listingId], references: [id])
+  review     Review?   @relation(fields: [reviewId], references: [id])
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -271,56 +240,47 @@ model FeatureFlag {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   action    String
-  details   String   @db.Text
+  details   String
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([action])
 }
 
 model ContactRequest {
-  id          String    @id @default(cuid())
-  fromUserId  String    @map("from_user_id")
-  toUserId    String    @map("to_user_id")
-  listingId   String?   @map("listing_id")
-  message     String    @db.Text
-  status      String    @default("pending")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  handledById String?   @map("handled_by")
-  handledAt   DateTime? @map("handled_at")
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  fromUserId String   @map("from_user_id")
+  toUserId   String   @map("to_user_id")
+  message    String
+  status     String   @default("new")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+  fromUser   User     @relation("ContactRequestFrom", fields: [fromUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  toUser     User     @relation("ContactRequestTo", fields: [toUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  thread     Thread?
 
-  fromUser  User     @relation("ContactRequestFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser    User     @relation("ContactRequestTo", fields: [toUserId], references: [id], onDelete: Cascade)
-  handledBy User?    @relation("ContactRequestHandledBy", fields: [handledById], references: [id], onDelete: SetNull)
-  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
-  thread    Thread?
-
-  @@index([fromUserId])
-  @@index([toUserId])
-  @@index([listingId])
-  @@index([status])
+  @@index([fromUserId, createdAt], map: "idx_contact_requests_from_user")
+  @@index([toUserId, status, createdAt], map: "idx_contact_requests_to_user")
   @@map("contact_requests")
 }
 
 model Thread {
-  id            String    @id @default(cuid())
-  requestId     String    @unique @map("request_id")
-  userAId       String    @map("user_a_id")
-  userBId       String    @map("user_b_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @map("updated_at")
-  lastMessageAt DateTime? @map("last_message_at")
+  id            String          @id @default(cuid())
+  userAId       String          @map("user_a_id")
+  userBId       String          @map("user_b_id")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime        @default(now()) @map("updated_at") @db.Timestamp(6)
+  lastMessageAt DateTime?       @map("last_message_at") @db.Timestamp(6)
+  requestId     String?         @unique @map("request_id")
+  messages      ThreadMessage[]
+  request       ContactRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  userA         User            @relation("ThreadUserA", fields: [userAId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  userB         User            @relation("ThreadUserB", fields: [userBId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  request  ContactRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  userA    User            @relation("ThreadUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB    User            @relation("ThreadUserB", fields: [userBId], references: [id], onDelete: Cascade)
-  messages ThreadMessage[]
-
-  @@index([userAId])
-  @@index([userBId])
+  @@unique([userAId, userBId], map: "contact_threads_pair_idx")
   @@map("contact_threads")
 }
 
@@ -328,24 +288,12 @@ model ThreadMessage {
   id        String   @id @default(cuid())
   threadId  String   @map("thread_id")
   senderId  String   @map("sender_id")
-  body      String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  sender User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([threadId])
-  @@index([senderId])
   @@map("contact_messages")
-}
-
-//
-// ✅ Onboarding (NEW)
-//
-
-enum UserRole {
-  BRAND
-  INFLUENCER
 }
 
 model UserLocation {
@@ -360,8 +308,7 @@ model UserLocation {
   fullAddress String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([pincode])
 }
@@ -373,11 +320,10 @@ model InfluencerProfile {
   dob         String?
   languages   String[] @default([])
   title       String?
-  description String?  @db.Text
+  description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model InfluencerCategory {
@@ -385,8 +331,7 @@ model InfluencerCategory {
   userId    String
   key       String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
   @@index([userId])
@@ -402,8 +347,7 @@ model InfluencerSocial {
   url       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform])
   @@index([userId])
@@ -418,8 +362,7 @@ model BrandProfile {
   businessType String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model BrandCategory {
@@ -427,8 +370,7 @@ model BrandCategory {
   userId    String
   key       String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
   @@index([userId])
@@ -440,26 +382,11 @@ model BrandPlatform {
   userId    String
   key       String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key])
   @@index([userId])
   @@index([key])
-}
-
-// -------------------------------------------------------------
-// Media support for influencers and brands
-// These models allow us to store image metadata for profile and
-// cover images. Files themselves should be stored in object
-// storage (e.g. S3, Cloudinary, Supabase). We only store the
-// URL and type here. An enum type is used to enforce the allowed
-// variants (PROFILE or COVER) for each record. Sort order can
-// optionally be supplied so the frontend can order the images.
-
-enum InfluencerMediaType {
-  PROFILE
-  COVER
 }
 
 model InfluencerMedia {
@@ -469,15 +396,9 @@ model InfluencerMedia {
   url       String
   sortOrder Int?
   createdAt DateTime            @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-}
-
-enum BrandMediaType {
-  PROFILE
-  COVER
 }
 
 model BrandMedia {
@@ -487,40 +408,139 @@ model BrandMedia {
   url       String
   sortOrder Int?
   createdAt DateTime       @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model SavedSearch {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String // influencer | brand
-  name      String?
-  slug      String?
-  tags      String[] @default([])
-  params    Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@index([type])
-  @@map("saved_searches")
 }
 
 model PincodeOffice {
-  pincode    String
   officename String
+  pincode    String
+  district   String?
+  statename  String?
+  latitude   Float?
+  longitude  Float?
 
-  district  String?
-  statename String?
-  latitude  Float?
-  longitude Float?
-
-  @@id([pincode, officename])
-  @@index([pincode])
+  @@id([officename, pincode])
+  @@index([officename], map: "pincode_offices_pincode_idx")
   @@map("pincode_offices")
+}
+
+model brand_values {
+  id         BigInt    @id @default(autoincrement())
+  key        String
+  value      String
+  label      String?
+  meta       Json?     @default("{}")
+  sort_order Int?      @default(0)
+  is_active  Boolean?  @default(true)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([key, value])
+  @@index([key, is_active, sort_order], map: "idx_brand_values_key_active")
+}
+
+model influencer_values {
+  id         BigInt    @id @default(autoincrement())
+  key        String
+  value      String
+  label      String?
+  meta       Json?     @default("{}")
+  sort_order Int?      @default(0)
+  is_active  Boolean?  @default(true)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([key, value])
+  @@index([key, is_active, sort_order], map: "idx_influencer_values_key_active")
+}
+
+model user_identities {
+  id               BigInt   @id @default(autoincrement())
+  user_id          String
+  provider         String
+  provider_user_id String
+  email            String?
+  phone            String?
+  created_at       DateTime @default(now()) @db.Timestamp(6)
+  updated_at       DateTime @default(now()) @db.Timestamp(6)
+  users            User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, provider_user_id])
+  @@unique([user_id, provider, provider_user_id])
+  @@index([email], map: "idx_user_identities_email")
+  @@index([phone], map: "idx_user_identities_phone")
+  @@index([user_id], map: "idx_user_identities_user_id")
+}
+
+model username_history {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String
+  old_username String   @unique(map: "username_history_old_username_unique")
+  new_username String?
+  changed_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([user_id, changed_at(sort: Desc)])
+}
+
+enum UserRole {
+  BRAND
+  INFLUENCER
+}
+
+enum InfluencerMediaType {
+  PROFILE
+  COVER
+}
+
+enum BrandMediaType {
+  PROFILE
+  COVER
+}
+
+model InfluencerPackage {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  platform    String
+  price       Float
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analytics   InfluencerPackageAnalytics?
+  events      InfluencerPackageEvent[]
+
+  @@index([userId])
+  @@index([platform])
+}
+
+model InfluencerPackageAnalytics {
+  id        String   @id @default(cuid())
+  packageId String   @unique
+  views     Int      @default(0)
+  clicks    Int      @default(0)
+  saves     Int      @default(0)
+  orders    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+}
+
+model InfluencerPackageEvent {
+  id        String   @id @default(cuid())
+  packageId String
+  eventType String
+  userId    String?
+  ipAddress String?
+  sessionId String?
+  createdAt DateTime @default(now())
+  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([packageId])
+  @@index([eventType])
+  @@index([userId])
 }
