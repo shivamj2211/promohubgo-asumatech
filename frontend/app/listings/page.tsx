@@ -1295,11 +1295,13 @@ useEffect(() => {
           <div className="py-10 text-center text-slate-600 dark:text-zinc-300">Loading…</div>
         ) : listings.length ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {listings.map((it) => (
-              <div
-                key={it.id}
-                className="rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md transition overflow-hidden"
-              >
+            {listings.map((it) => {
+              const profileSlug = it.username || it.id
+              return (
+                <div
+                  key={it.id}
+                  className="rounded-3xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md transition overflow-hidden"
+                >
                 <div className="p-5 flex items-start gap-4">
                   <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-zinc-800 overflow-hidden flex items-center justify-center shrink-0">
                     {it.avatarUrl ? (
@@ -1367,7 +1369,7 @@ useEffect(() => {
 
                     <div className="mt-5 flex items-center gap-2">
                       <Link
-                        href={`/creator/${it.id}`}
+                        href={`/creator/${profileSlug}`}
                         className="inline-flex items-center justify-center rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-2 text-sm font-extrabold hover:bg-slate-50 dark:hover:bg-zinc-900"
                       >
                         View profile
@@ -1383,7 +1385,8 @@ useEffect(() => {
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="py-10 text-center text-slate-600 dark:text-zinc-300">No results found.</div>

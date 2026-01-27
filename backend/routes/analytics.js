@@ -7,6 +7,12 @@ const { COOKIE_NAME } = require("../utils/jwt");
 const router = express.Router();
 
 const EVENT_TYPES = ["profile_view", "package_click", "package_save", "order_created"];
+const EVENT_TO_ANALYTICS = {
+  profile_view: { entity: "PROFILE", event: "VIEW" },
+  package_click: { entity: "PACKAGE", event: "CLICK" },
+  package_save: { entity: "PACKAGE", event: "SAVE" },
+  order_created: { entity: "PACKAGE", event: "ORDER" },
+};
 
 function getOptionalUserId(req) {
   try {
@@ -63,6 +69,11 @@ router.post("/track", async (req, res) => {
       orders: normalizedEvent === "order_created" ? 1 : 0,
     };
 
+    const analyticsTarget =
+      normalizedEvent === "profile_view"
+        ? { entity: "PROFILE", entityId: pkg.userId }
+        : { entity: "PACKAGE", entityId: pkg.id };
+
     await prisma.$transaction([
       prisma.influencerPackageAnalytics.upsert({
         where: { packageId },
@@ -87,6 +98,13 @@ router.post("/track", async (req, res) => {
           userId,
           ipAddress,
           sessionId: sessionId ? String(sessionId) : null,
+        },
+      }),
+      prisma.analyticsEvent.create({
+        data: {
+          entity: analyticsTarget.entity,
+          entityId: analyticsTarget.entityId,
+          event: EVENT_TO_ANALYTICS[normalizedEvent].event,
         },
       }),
     ]);
@@ -125,6 +143,126 @@ router.get("/package/:packageId", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("Fetch analytics error:", err);
     res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+/**
+ * GET /api/analytics/packages/:username
+ * Public analytics for creator packages
+ */
+router.get("/packages/:username", async (req, res) => {
+  try {
+    const username = String(req.params.username || "").trim();
+    if (!username) return res.status(400).json({ error: "Invalid username" });
+
+    const user = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" } },
+      select: { id: true, username: true },
+    });
+    if (!user) return res.status(404).json({ error: "Profile not found" });
+
+    const packages = await prisma.influencerPackage.findMany({
+      where: { userId: user.id },
+      include: { analytics: true },
+      orderBy: { price: "asc" },
+    });
+
+    const items = packages.map((pkg) => ({
+      packageId: pkg.id,
+      views: pkg.analytics?.views || 0,
+      clicks: pkg.analytics?.clicks || 0,
+      saves: pkg.analytics?.saves || 0,
+      orders: pkg.analytics?.orders || 0,
+    }));
+
+    res.json({ ok: true, username: user.username, items });
+  } catch (err) {
+    console.error("Fetch analytics by username error:", err);
+    res.status(500).json({ error: "Failed to fetch analytics" });
+  }
+});
+
+/**
+ * GET /api/analytics/creator
+ * Creator analytics summary (profile + packages)
+ */
+router.get("/creator", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Login required" });
+
+    const packages = await prisma.influencerPackage.findMany({
+      where: { userId },
+      select: { id: true, title: true, platform: true, price: true },
+    });
+
+    const packageIds = packages.map((p) => p.id);
+
+    const events = await prisma.analyticsEvent.groupBy({
+      by: ["entity", "entityId", "event"],
+      where: {
+        OR: [
+          { entity: "PROFILE", entityId: userId },
+          { entity: "PACKAGE", entityId: { in: packageIds } },
+        ],
+      },
+      _count: { _all: true },
+    });
+
+    const totals = { views: 0, clicks: 0, saves: 0, orders: 0 };
+    const perPackage = new Map(
+      packages.map((pkg) => [
+        pkg.id,
+        {
+          packageId: pkg.id,
+          title: pkg.title,
+          platform: pkg.platform,
+          price: pkg.price,
+          views: 0,
+          clicks: 0,
+          saves: 0,
+          orders: 0,
+        },
+      ])
+    );
+
+    for (const row of events) {
+      const count = row._count?._all || 0;
+      if (row.entity === "PROFILE") {
+        if (row.event === "VIEW") totals.views += count;
+        if (row.event === "CLICK") totals.clicks += count;
+        if (row.event === "SAVE") totals.saves += count;
+        if (row.event === "ORDER") totals.orders += count;
+      } else if (row.entity === "PACKAGE") {
+        const entry = perPackage.get(row.entityId);
+        if (!entry) continue;
+        if (row.event === "VIEW") {
+          entry.views += count;
+          totals.views += count;
+        }
+        if (row.event === "CLICK") {
+          entry.clicks += count;
+          totals.clicks += count;
+        }
+        if (row.event === "SAVE") {
+          entry.saves += count;
+          totals.saves += count;
+        }
+        if (row.event === "ORDER") {
+          entry.orders += count;
+          totals.orders += count;
+        }
+      }
+    }
+
+    return res.json({
+      ok: true,
+      totals,
+      packages: Array.from(perPackage.values()),
+    });
+  } catch (err) {
+    console.error("Fetch creator analytics error:", err);
+    return res.status(500).json({ error: "Failed to fetch analytics" });
   }
 });
 

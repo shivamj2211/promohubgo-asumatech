@@ -6,11 +6,22 @@ import { apiFetch } from "@/lib/api";
 type Package = {
   id: string;
   title: string;
-  platform: "instagram" | "tiktok" | "ugc";
+  platform: string;
   price: number;
   description?: string | null;
   isActive: boolean;
 };
+
+const PLATFORM_OPTIONS = [
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "ugc", label: "UGC" },
+  { value: "youtube", label: "YouTube" },
+  { value: "facebook", label: "Facebook" },
+  { value: "x", label: "X (Twitter)" },
+  { value: "telegram", label: "Telegram" },
+  { value: "whatsapp", label: "WhatsApp" },
+];
 
 export default function PackagesDashboardPage() {
   const [packages, setPackages] = useState<Package[]>([]);
@@ -106,9 +117,11 @@ export default function PackagesDashboardPage() {
             setForm({ ...form, platform: e.target.value })
           }
         >
-          <option value="instagram">Instagram</option>
-          <option value="tiktok">TikTok</option>
-          <option value="ugc">UGC</option>
+          {PLATFORM_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
 
         <input

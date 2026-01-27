@@ -80,7 +80,13 @@ export function TopNav() {
             </Link>
           </div>
         ) : (
-          <div className="relative">
+          <div className="relative flex items-center gap-3">
+            <Link
+              href="/checkout"
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+            >
+              Cart
+            </Link>
             <button
               onClick={() => setOpen((v) => !v)}
               className="h-10 w-10 rounded-full border border-gray-300 bg-white flex items-center justify-center dark:border-zinc-800 dark:bg-zinc-950"

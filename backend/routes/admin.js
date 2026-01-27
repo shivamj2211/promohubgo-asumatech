@@ -640,4 +640,41 @@ router.delete("/users/:id", async (req, res) => {
   }
 });
 
+router.get("/analytics", async (req, res) => {
+  try {
+    const [userCount, orderCount, paymentCount, earningAgg] = await Promise.all([
+      prisma.user.count(),
+      prisma.order.count(),
+      prisma.payment.count(),
+      prisma.creatorEarning.aggregate({
+        _sum: { grossAmount: true, platformFee: true, netAmount: true },
+      }),
+    ]);
+
+    const orderStatus = await prisma.order.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    });
+
+    return res.json({
+      ok: true,
+      totals: {
+        users: userCount,
+        orders: orderCount,
+        payments: paymentCount,
+        gross: earningAgg._sum?.grossAmount || 0,
+        fees: earningAgg._sum?.platformFee || 0,
+        net: earningAgg._sum?.netAmount || 0,
+      },
+      ordersByStatus: orderStatus.map((row) => ({
+        status: row.status,
+        count: row._count?._all || 0,
+      })),
+    });
+  } catch (e) {
+    console.error("GET /api/admin/analytics ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
 module.exports = router;

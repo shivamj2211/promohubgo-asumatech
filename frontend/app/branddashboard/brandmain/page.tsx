@@ -9,10 +9,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { fetchValues } from '@/lib/value-cache'
 
 export default function BrandPage() {
   const [platforms, setPlatforms] = useState<Array<{ value: string; label: string }>>([])
+  const demoUsername = 'nick.digiovanni'
 
   useEffect(() => {
     let active = true
@@ -129,9 +131,12 @@ export default function BrandPage() {
                 <div className="p-4">
                   <h4 className="font-semibold mb-1">Influencer {idx + 1}</h4>
                   <p className="text-gray-600 text-sm mb-2">Category • Platform</p>
-                  <button className="mt-2 w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
+                  <Link
+                    href={`/creator/${demoUsername}`}
+                    className="mt-2 inline-flex w-full items-center justify-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium"
+                  >
                     View Profile
-                  </button>
+                  </Link>
                 </div>
               </div>
             ))}

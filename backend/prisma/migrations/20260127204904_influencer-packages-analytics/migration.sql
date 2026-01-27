@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "InfluencerPackage" (
+CREATE TABLE IF NOT EXISTS "InfluencerPackage" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE "InfluencerPackage" (
 );
 
 -- CreateTable
-CREATE TABLE "InfluencerPackageAnalytics" (
+CREATE TABLE IF NOT EXISTS "InfluencerPackageAnalytics" (
     "id" TEXT NOT NULL,
     "packageId" TEXT NOT NULL,
     "views" INTEGER NOT NULL DEFAULT 0,
@@ -28,7 +28,7 @@ CREATE TABLE "InfluencerPackageAnalytics" (
 );
 
 -- CreateTable
-CREATE TABLE "InfluencerPackageEvent" (
+CREATE TABLE IF NOT EXISTS "InfluencerPackageEvent" (
     "id" TEXT NOT NULL,
     "packageId" TEXT NOT NULL,
     "eventType" TEXT NOT NULL,
@@ -41,32 +41,68 @@ CREATE TABLE "InfluencerPackageEvent" (
 );
 
 -- CreateIndex
-CREATE INDEX "InfluencerPackage_userId_idx" ON "InfluencerPackage"("userId");
+CREATE INDEX IF NOT EXISTS "InfluencerPackage_userId_idx" ON "InfluencerPackage"("userId");
 
 -- CreateIndex
-CREATE INDEX "InfluencerPackage_platform_idx" ON "InfluencerPackage"("platform");
+CREATE INDEX IF NOT EXISTS "InfluencerPackage_platform_idx" ON "InfluencerPackage"("platform");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "InfluencerPackageAnalytics_packageId_key" ON "InfluencerPackageAnalytics"("packageId");
+CREATE UNIQUE INDEX IF NOT EXISTS "InfluencerPackageAnalytics_packageId_key" ON "InfluencerPackageAnalytics"("packageId");
 
 -- CreateIndex
-CREATE INDEX "InfluencerPackageEvent_packageId_idx" ON "InfluencerPackageEvent"("packageId");
+CREATE INDEX IF NOT EXISTS "InfluencerPackageEvent_packageId_idx" ON "InfluencerPackageEvent"("packageId");
 
 -- CreateIndex
-CREATE INDEX "InfluencerPackageEvent_eventType_idx" ON "InfluencerPackageEvent"("eventType");
+CREATE INDEX IF NOT EXISTS "InfluencerPackageEvent_eventType_idx" ON "InfluencerPackageEvent"("eventType");
 
 -- CreateIndex
-CREATE INDEX "InfluencerPackageEvent_userId_idx" ON "InfluencerPackageEvent"("userId");
+CREATE INDEX IF NOT EXISTS "InfluencerPackageEvent_userId_idx" ON "InfluencerPackageEvent"("userId");
 
 -- AddForeignKey
-ALTER TABLE "InfluencerPackage" ADD CONSTRAINT "InfluencerPackage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'InfluencerPackage_userId_fkey'
+  ) THEN
+    ALTER TABLE "InfluencerPackage"
+    ADD CONSTRAINT "InfluencerPackage_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "InfluencerPackageAnalytics" ADD CONSTRAINT "InfluencerPackageAnalytics_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "InfluencerPackage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'InfluencerPackageAnalytics_packageId_fkey'
+  ) THEN
+    ALTER TABLE "InfluencerPackageAnalytics"
+    ADD CONSTRAINT "InfluencerPackageAnalytics_packageId_fkey"
+    FOREIGN KEY ("packageId") REFERENCES "InfluencerPackage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "InfluencerPackageEvent" ADD CONSTRAINT "InfluencerPackageEvent_packageId_fkey" FOREIGN KEY ("packageId") REFERENCES "InfluencerPackage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'InfluencerPackageEvent_packageId_fkey'
+  ) THEN
+    ALTER TABLE "InfluencerPackageEvent"
+    ADD CONSTRAINT "InfluencerPackageEvent_packageId_fkey"
+    FOREIGN KEY ("packageId") REFERENCES "InfluencerPackage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "InfluencerPackageEvent" ADD CONSTRAINT "InfluencerPackageEvent_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'InfluencerPackageEvent_userId_fkey'
+  ) THEN
+    ALTER TABLE "InfluencerPackageEvent"
+    ADD CONSTRAINT "InfluencerPackageEvent_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 

@@ -20,8 +20,14 @@ const threadsRouter = require("./routes/threads");
 const supportRouter = require("./routes/support");
 const savedSearchesRouter = require("./routes/savedSearches");
 const influencerPackagesRouter = require("./routes/influencerPackages");
+const packagesRouter = require("./routes/packages");
 const ordersRouter = require("./routes/orders");
 const analyticsRouter = require("./routes/analytics");
+const cartRouter = require("./routes/cart");
+const proposalsRouter = require("./routes/proposals");
+const paymentsRouter = require("./routes/payments");
+const creatorEarningsRouter = require("./routes/creatorEarnings");
+const creatorAnalyticsRouter = require("./routes/creatorAnalytics");
 const app = express();
 
 // Basic cookie parsing middleware (avoids external dependency)
@@ -73,8 +79,14 @@ app.use("/api/threads", threadsRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/saved-searches", savedSearchesRouter);
 app.use("/api/influencer-packages", influencerPackagesRouter);
+app.use("/api/packages", packagesRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/cart", cartRouter);
+app.use("/api/proposals", proposalsRouter);
+app.use("/api/payments", paymentsRouter);
+app.use("/api/creator/earnings", creatorEarningsRouter);
+app.use("/api/creator/analytics", creatorAnalyticsRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {

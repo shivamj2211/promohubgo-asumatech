@@ -4,16 +4,31 @@ const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
-const ALLOWED_PLATFORMS = ["instagram", "tiktok", "ugc"];
+const ALLOWED_PLATFORMS = [
+  "instagram",
+  "tiktok",
+  "ugc",
+  "youtube",
+  "facebook",
+  "x",
+  "telegram",
+  "whatsapp",
+];
 
 /**
  * GET /api/influencer-packages/public/:userId
  * Public packages for creator profile
  */
 router.get("/public/:userId", async (req, res) => {
-  const { userId } = req.params;
+  let { userId } = req.params;
 
   try {
+    const byUsername = await prisma.user.findFirst({
+      where: { username: { equals: userId, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (byUsername?.id) userId = byUsername.id;
+
     const packages = await prisma.influencerPackage.findMany({
       where: {
         userId,

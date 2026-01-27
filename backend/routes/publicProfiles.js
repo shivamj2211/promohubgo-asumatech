@@ -1,5 +1,6 @@
 const express = require("express");
 const pool = require("../db");
+const { prisma } = require("../lib/prisma");
 
 const router = express.Router();
 
@@ -157,6 +158,96 @@ async function resolveUserIdentifier(identifier) {
 
   // 5) Fallback: treat as userId (uuid)
   return { userId: clean, type: null, shouldRedirect: false, canonicalUsername: null };
+}
+
+async function resolveUserByUsername(username) {
+  const clean = String(username || "").trim();
+  const lower = clean.toLowerCase();
+  if (!clean) {
+    return { userId: null, type: null, shouldRedirect: false, canonicalUsername: null };
+  }
+
+  // 1) Try CURRENT username in users (case-insensitive)
+  try {
+    const byUsernameUsers = await pool.query(
+      `SELECT id, username, role FROM users WHERE LOWER(username) = $1 LIMIT 1`,
+      [lower]
+    );
+    if (byUsernameUsers.rows.length) {
+      const u = byUsernameUsers.rows[0];
+      return {
+        userId: u.id,
+        type: String(u.role || "").toUpperCase() || null,
+        shouldRedirect: false,
+        canonicalUsername: u.username || null,
+      };
+    }
+  } catch {}
+
+  // 2) Try CURRENT username in "User" (case-insensitive)
+  try {
+    const byUsernamePrisma = await pool.query(
+      `SELECT id, username, role FROM "User" WHERE LOWER(username) = $1 LIMIT 1`,
+      [lower]
+    );
+    if (byUsernamePrisma.rows.length) {
+      const u = byUsernamePrisma.rows[0];
+      return {
+        userId: u.id,
+        type: String(u.role || "").toUpperCase() || null,
+        shouldRedirect: false,
+        canonicalUsername: u.username || null,
+      };
+    }
+  } catch {}
+
+  // 3) Try OLD username in username_history (case-insensitive)
+  try {
+    const hist = await pool.query(
+      `SELECT user_id FROM username_history WHERE LOWER(old_username) = $1 LIMIT 1`,
+      [lower]
+    );
+
+    if (hist.rows.length) {
+      const userId = hist.rows[0].user_id;
+
+      let canonical = null;
+      let role = null;
+
+      try {
+        const u1 = await pool.query(
+          `SELECT username, role FROM users WHERE id = $1 LIMIT 1`,
+          [userId]
+        );
+        if (u1.rows.length) {
+          canonical = u1.rows[0].username || null;
+          role = u1.rows[0].role || null;
+        }
+      } catch {}
+
+      if (!canonical) {
+        try {
+          const u2 = await pool.query(
+            `SELECT username, role FROM "User" WHERE id = $1 LIMIT 1`,
+            [userId]
+          );
+          if (u2.rows.length) {
+            canonical = u2.rows[0].username || null;
+            role = u2.rows[0].role || null;
+          }
+        } catch {}
+      }
+
+      return {
+        userId,
+        type: String(role || "").toUpperCase() || null,
+        shouldRedirect: Boolean(canonical && canonical.toLowerCase() !== lower),
+        canonicalUsername: canonical || null,
+      };
+    }
+  } catch {}
+
+  return { userId: null, type: null, shouldRedirect: false, canonicalUsername: null };
 }
 
 async function loadUserRow(userId) {
@@ -359,13 +450,16 @@ router.get("/profile/:userId", async (req, res) => {
   }
 });
 
-router.get("/influencers/:identifier", async (req, res) => {
+router.get("/influencers/:username", async (req, res) => {
   try {
-    const identifier = String(req.params.identifier || "").trim();
-    if (!identifier) return res.status(400).json({ ok: false, error: "Invalid identifier" });
+    const username = String(req.params.username || "").trim();
+    if (!username) return res.status(400).json({ ok: false, error: "Invalid username" });
 
-    const resolved = await resolveUserIdentifier(identifier);
-    if (!resolved.userId) return res.status(400).json({ ok: false, error: "Invalid identifier" });
+    let resolved = await resolveUserByUsername(username);
+    if (!resolved.userId) {
+      resolved = await resolveUserIdentifier(username);
+    }
+    if (!resolved.userId) return res.status(400).json({ ok: false, error: "Invalid username" });
 
     const data = await buildPublicProfile(resolved.userId, resolved.type);
     if (!data) return res.status(404).json({ ok: false, error: "Profile not found" });
@@ -374,10 +468,90 @@ router.get("/influencers/:identifier", async (req, res) => {
       ...data,
       canonicalUsername: resolved.canonicalUsername || data?.user?.username || null,
       shouldRedirect: Boolean(resolved.shouldRedirect),
-      requested: identifier,
+      requested: username,
     });
   } catch (e) {
     console.error("GET /api/public/influencers ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+router.get("/packages/:username", async (req, res) => {
+  try {
+    const username = String(req.params.username || "").trim();
+    if (!username) return res.status(400).json({ ok: false, error: "Invalid username" });
+
+    let resolved = await resolveUserByUsername(username);
+    if (!resolved.userId) {
+      resolved = await resolveUserIdentifier(username);
+    }
+    if (!resolved.userId) return res.status(404).json({ ok: false, error: "Profile not found" });
+
+    const packages = await prisma.influencerPackage.findMany({
+      where: {
+        userId: resolved.userId,
+        isActive: true,
+      },
+      orderBy: { price: "asc" },
+    });
+
+    return res.json(packages);
+  } catch (e) {
+    console.error("GET /api/public/packages ERROR:", e);
+    return res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+/**
+ * GET /api/public/sanity/:username
+ * Quick sanity snapshot for seeded creator data
+ */
+router.get("/sanity/:username", async (req, res) => {
+  try {
+    const username = String(req.params.username || "").trim();
+    if (!username) return res.status(400).json({ ok: false, error: "Invalid username" });
+
+    let resolved = await resolveUserByUsername(username);
+    if (!resolved.userId) {
+      resolved = await resolveUserIdentifier(username);
+    }
+    if (!resolved.userId) return res.status(404).json({ ok: false, error: "Profile not found" });
+
+    const profile = await buildPublicProfile(resolved.userId, resolved.type);
+
+    const packages = await prisma.influencerPackage.findMany({
+      where: { userId: resolved.userId, isActive: true },
+      include: { analytics: true },
+      orderBy: { price: "asc" },
+    });
+
+    const orders = await prisma.order.findMany({
+      where: { listingId: { in: packages.map((p) => p.id) } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({
+      ok: true,
+      userId: resolved.userId,
+      username: profile?.user?.username || username,
+      profile,
+      packages: packages.map((p) => ({
+        id: p.id,
+        title: p.title,
+        platform: p.platform,
+        price: p.price,
+        analytics: p.analytics || { views: 0, clicks: 0, saves: 0, orders: 0 },
+      })),
+      orders: orders.map((o) => ({
+        id: o.id,
+        status: o.status,
+        listingId: o.listingId,
+        totalPrice: o.totalPrice,
+        createdAt: o.createdAt,
+      })),
+    });
+  } catch (e) {
+    console.error("GET /api/public/sanity ERROR:", e);
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });

@@ -2,220 +2,464 @@ import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
+const PLATFORM_LIST = [
+  "instagram",
+  "tiktok",
+  "ugc",
+  "youtube",
+  "facebook",
+  "x",
+  "telegram",
+  "whatsapp",
+] as const
+
+type Platform = (typeof PLATFORM_LIST)[number]
+
+type CreatorSeed = {
+  username: string
+  name: string
+  email: string
+  gender: string
+  dob: string
+  languages: string[]
+  title: string
+  description: string
+  categories: string[]
+  location: { district: string; statename: string }
+}
+
+function platformUrl(platform: Platform, handle: string, index: number) {
+  if (platform === "instagram") return `https://instagram.com/${handle}`
+  if (platform === "tiktok") return `https://tiktok.com/@${handle}`
+  if (platform === "youtube") return `https://youtube.com/@${handle}`
+  if (platform === "facebook") return `https://facebook.com/${handle}`
+  if (platform === "x") return `https://x.com/${handle}`
+  if (platform === "telegram") return `https://t.me/${handle}`
+  if (platform === "whatsapp") return `https://wa.me/91${index}00000000`
+  return `https://example.com/${handle}`
+}
+
+async function ensureInfluencerUser(seed: CreatorSeed) {
+  return prisma.user.upsert({
+    where: { username: seed.username },
+    update: {},
+    create: {
+      name: seed.name,
+      email: seed.email,
+      username: seed.username,
+      role: "INFLUENCER",
+      onboardingCompleted: true,
+      isSeller: true,
+    },
+  })
+}
+
+async function ensureBrandUser() {
+  return prisma.user.upsert({
+    where: { username: "demo_brand" },
+    update: {},
+    create: {
+      name: "Demo Brand",
+      email: "brand@demo.local",
+      username: "demo_brand",
+      role: "BRAND",
+      onboardingCompleted: true,
+    },
+  })
+}
+
+async function ensureInfluencerProfile(userId: string, seed: CreatorSeed, index: number) {
+  await prisma.influencerProfile.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      gender: seed.gender,
+      dob: seed.dob,
+      languages: seed.languages,
+      title: seed.title,
+      description: seed.description,
+    },
+  })
+
+  for (const key of seed.categories) {
+    await prisma.influencerCategory.upsert({
+      where: { userId_key: { userId, key } },
+      update: {},
+      create: { userId, key },
+    })
+  }
+
+  for (const platform of PLATFORM_LIST) {
+    const handle = seed.username
+    const followers = `${10 + index * 3}k`
+    const url = platformUrl(platform, handle, index)
+    await prisma.influencerSocial.upsert({
+      where: { userId_platform: { userId, platform } },
+      update: { username: handle, followers, url },
+      create: { userId, platform, username: handle, followers, url },
+    })
+  }
+
+  const existingProfileMedia = await prisma.influencerMedia.findFirst({
+    where: { userId, type: "PROFILE" },
+  })
+  if (!existingProfileMedia) {
+    await prisma.influencerMedia.create({
+      data: {
+        userId,
+        type: "PROFILE",
+        url: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1",
+        sortOrder: 1,
+      },
+    })
+  }
+
+  const existingCoverMedia = await prisma.influencerMedia.findFirst({
+    where: { userId, type: "COVER" },
+  })
+  if (!existingCoverMedia) {
+    await prisma.influencerMedia.create({
+      data: {
+        userId,
+        type: "COVER",
+        url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
+        sortOrder: 1,
+      },
+    })
+  }
+
+  await prisma.userLocation.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      district: seed.location.district,
+      statename: seed.location.statename,
+      fullAddress: `${seed.location.district}, ${seed.location.statename}`,
+    },
+  })
+}
+
+async function ensureBrandProfile(userId: string) {
+  await prisma.brandProfile.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      hereToDo: "Find influencers for a one-time campaign",
+      approxBudget: "$500-$1000",
+      businessType: "E-commerce",
+    },
+  })
+
+  await prisma.brandCategory.upsert({
+    where: { userId_key: { userId, key: "beauty" } },
+    update: {},
+    create: { userId, key: "beauty" },
+  })
+
+  await prisma.brandPlatform.upsert({
+    where: { userId_key: { userId, key: "instagram" } },
+    update: {},
+    create: { userId, key: "instagram" },
+  })
+}
+
+async function ensurePackages(userId: string, index: number) {
+  const templates = [
+    { title: "Instagram Reel", platform: "instagram", price: 150, description: "30-second Reel with CTA." },
+    { title: "TikTok Video", platform: "tiktok", price: 140, description: "Short TikTok trend video." },
+    { title: "UGC Bundle", platform: "ugc", price: 220, description: "Three UGC videos for ads." },
+    { title: "YouTube Integration", platform: "youtube", price: 420, description: "60-second integration." },
+    { title: "Facebook Reel", platform: "facebook", price: 160, description: "Facebook short-form reel." },
+    { title: "X Thread", platform: "x", price: 90, description: "Sponsored X thread." },
+    { title: "Telegram Post", platform: "telegram", price: 70, description: "Telegram community post." },
+    { title: "WhatsApp Community", platform: "whatsapp", price: 80, description: "WhatsApp community promo." },
+  ]
+
+  const results = []
+  for (const t of templates) {
+    const existing = await prisma.influencerPackage.findFirst({
+      where: { userId, title: t.title, platform: t.platform },
+    })
+    if (existing) {
+      results.push(existing)
+      continue
+    }
+    const created = await prisma.influencerPackage.create({
+      data: {
+        userId,
+        title: t.title,
+        platform: t.platform,
+        price: t.price + index * 5,
+        description: t.description,
+        isActive: true,
+      },
+    })
+    results.push(created)
+  }
+  return results
+}
+
+async function ensureOrdersAndEarnings({
+  creatorUserId,
+  brandUserId,
+  packages,
+}: {
+  creatorUserId: string
+  brandUserId: string
+  packages: { id: string; price: number; title: string; description?: string | null }[]
+}) {
+  const seller = await prisma.seller.upsert({
+    where: { userId: creatorUserId },
+    update: {},
+    create: { userId: creatorUserId, bio: "Influencer package seller" },
+  })
+
+  const category = await prisma.category.upsert({
+    where: { slug: "influencer-package" },
+    update: {},
+    create: { name: "Influencer Package", slug: "influencer-package" },
+  })
+
+  for (const pkg of packages.slice(0, 2)) {
+    await prisma.listing.upsert({
+      where: { id: pkg.id },
+      update: {
+        title: pkg.title,
+        description: pkg.description || "Influencer package",
+        price: pkg.price,
+        sellerId: seller.id,
+        categoryId: category.id,
+      },
+      create: {
+        id: pkg.id,
+        title: pkg.title,
+        description: pkg.description || "Influencer package",
+        price: pkg.price,
+        sellerId: seller.id,
+        categoryId: category.id,
+      },
+    })
+
+    const existingOrder = await prisma.order.findFirst({
+      where: { buyerId: brandUserId, listingId: pkg.id },
+    })
+
+    const order =
+      existingOrder ||
+      (await prisma.order.create({
+        data: {
+          listingId: pkg.id,
+          buyerId: brandUserId,
+          sellerId: seller.id,
+          totalPrice: pkg.price,
+          status: "COMPLETED",
+        },
+      }))
+
+    const existingEarning = await prisma.creatorEarning.findFirst({
+      where: { orderId: order.id },
+    })
+    if (!existingEarning) {
+      const grossAmount = Number(order.totalPrice || 0)
+      const platformFee = Number((grossAmount * 0.1).toFixed(2))
+      const netAmount = Number((grossAmount - platformFee).toFixed(2))
+
+      await prisma.creatorEarning.create({
+        data: {
+          creatorId: creatorUserId,
+          orderId: order.id,
+          packageId: pkg.id,
+          grossAmount,
+          platformFee,
+          netAmount,
+        },
+      })
+    }
+
+    await prisma.payment.upsert({
+      where: { orderId: order.id },
+      update: {},
+      create: {
+        orderId: order.id,
+        provider: "MOCK",
+        amount: order.totalPrice,
+        status: "SUCCESS",
+        currency: "INR",
+      },
+    })
+  }
+}
+
+async function ensureAnalytics({ creatorUserId, packages }: { creatorUserId: string; packages: { id: string }[] }) {
+  const existing = await prisma.analyticsEvent.count({
+    where: { entity: "PROFILE", entityId: creatorUserId },
+  })
+  if (existing > 0) return
+
+  await prisma.analyticsEvent.createMany({
+    data: [
+      { entity: "PROFILE", entityId: creatorUserId, event: "VIEW" },
+      { entity: "PROFILE", entityId: creatorUserId, event: "VIEW" },
+      { entity: "PROFILE", entityId: creatorUserId, event: "VIEW" },
+    ],
+  })
+
+  for (const pkg of packages) {
+    await prisma.analyticsEvent.createMany({
+      data: [
+        { entity: "PACKAGE", entityId: pkg.id, event: "VIEW" },
+        { entity: "PACKAGE", entityId: pkg.id, event: "CLICK" },
+        { entity: "PACKAGE", entityId: pkg.id, event: "SAVE" },
+        { entity: "PACKAGE", entityId: pkg.id, event: "ORDER" },
+      ],
+    })
+  }
+}
+
 async function main() {
-  console.log("🌱 Seeding database...")
+  const brand = await ensureBrandUser()
+  await ensureBrandProfile(brand.id)
 
-  // Clear existing data
-  await prisma.message.deleteMany()
-  await prisma.favorite.deleteMany()
-  await prisma.review.deleteMany()
-  await prisma.order.deleteMany()
-  await prisma.listingTag.deleteMany()
-  await prisma.listing.deleteMany()
-  await prisma.tag.deleteMany()
-  await prisma.seller.deleteMany()
-  await prisma.category.deleteMany()
-  await prisma.user.deleteMany()
-
-  // Create categories
-  const categories = await Promise.all([
-    prisma.category.create({
-      data: { name: "Tech", slug: "tech" },
-    }),
-    prisma.category.create({
-      data: { name: "Lifestyle", slug: "lifestyle" },
-    }),
-    prisma.category.create({
-      data: { name: "Gaming", slug: "gaming" },
-    }),
-    prisma.category.create({
-      data: { name: "Beauty", slug: "beauty" },
-    }),
-    prisma.category.create({
-      data: { name: "Finance", slug: "finance" },
-    }),
-  ])
-
-  // Create tags
-  const tags = await Promise.all([
-    prisma.tag.create({ data: { name: "Tutorial", slug: "tutorial" } }),
-    prisma.tag.create({ data: { name: "Review", slug: "review" } }),
-    prisma.tag.create({ data: { name: "Vlog", slug: "vlog" } }),
-    prisma.tag.create({ data: { name: "Educational", slug: "educational" } }),
-    prisma.tag.create({ data: { name: "Entertainment", slug: "entertainment" } }),
-  ])
-
-  // Create users
-  const users = await Promise.all([
-    prisma.user.create({
-      data: {
-        name: "Admin User",
-        email: "admin@colabatr.com",
-        isAdmin: true,
-        city: "San Francisco",
-        bio: "Platform administrator",
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: "John Creator",
-        email: "john@colabatr.com",
-        isSeller: true,
-        city: "Los Angeles",
-        bio: "Tech content creator with 100k followers",
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: "Sarah Influencer",
-        email: "sarah@colabatr.com",
-        isSeller: true,
-        city: "New York",
-        bio: "Lifestyle and beauty influencer",
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: "Mike Gamer",
-        email: "mike@colabatr.com",
-        isSeller: true,
-        city: "Seattle",
-        bio: "Gaming streamer and content creator",
-      },
-    }),
-    prisma.user.create({
-      data: {
-        name: "Lisa Buyer",
-        email: "lisa@colabatr.com",
-        city: "Boston",
-        bio: "Brand manager looking for collaborations",
-      },
-    }),
-  ])
-
-  // Create sellers
-  const sellers = await Promise.all([
-    prisma.seller.create({
-      data: { userId: users[1].id, bio: "Tech content specialist", rating: 4.8 },
-    }),
-    prisma.seller.create({
-      data: { userId: users[2].id, bio: "Beauty & lifestyle expert", rating: 4.9 },
-    }),
-    prisma.seller.create({
-      data: { userId: users[3].id, bio: "Gaming content professional", rating: 4.7 },
-    }),
-  ])
-
-  // Create listings
-  const listings = await Promise.all([
-    prisma.listing.create({
-      data: {
-        title: "Tech Product Review",
-        description: "Professional review of the latest tech products for your brand",
-        price: 500,
-        userId: users[1].id,
-        categoryId: categories[0].id,
-        tags: {
-          create: [{ tagId: tags[1].id }, { tagId: tags[3].id }],
-        },
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        title: "Lifestyle Photography Session",
-        description: "Premium lifestyle photoshoot and content creation",
-        price: 750,
-        userId: users[2].id,
-        categoryId: categories[1].id,
-        tags: {
-          create: [{ tagId: tags[0].id }, { tagId: tags[4].id }],
-        },
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        title: "Gaming Stream Setup",
-        description: "Full gaming stream setup with commentary and promotion",
-        price: 300,
-        userId: users[3].id,
-        categoryId: categories[2].id,
-        tags: {
-          create: [{ tagId: tags[0].id }, { tagId: tags[4].id }],
-        },
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        title: "Beauty Tutorial Video",
-        description: "Custom beauty tutorial featuring your product",
-        price: 600,
-        userId: users[2].id,
-        categoryId: categories[3].id,
-        tags: {
-          create: [{ tagId: tags[0].id }, { tagId: tags[4].id }],
-        },
-      },
-    }),
-    prisma.listing.create({
-      data: {
-        title: "Financial Tips Podcast",
-        description: "30-minute podcast episode discussing your financial product",
-        price: 400,
-        userId: users[1].id,
-        categoryId: categories[4].id,
-        tags: {
-          create: [{ tagId: tags[3].id }],
-        },
-      },
-    }),
-  ])
-
-  // Create orders
-  await prisma.order.create({
-    data: {
-      listingId: listings[0].id,
-      buyerId: users[4].id,
-      sellerId: sellers[0].id,
-      totalPrice: 500,
-      status: "completed",
+  const creators: CreatorSeed[] = [
+    {
+      username: "demo_creator_1",
+      name: "Aarav Mehta",
+      email: "creator1@demo.local",
+      gender: "male",
+      dob: "1996-02-14",
+      languages: ["english", "hindi"],
+      title: "Tech & Lifestyle Creator",
+      description: "Tech reviews, gadgets, and lifestyle hacks.",
+      categories: ["tech", "lifestyle", "ugc"],
+      location: { district: "Mumbai", statename: "Maharashtra" },
     },
-  })
-
-  // Create reviews
-  await prisma.review.create({
-    data: {
-      rating: 5,
-      comment: "Excellent work! The video quality was outstanding.",
-      reviewerId: users[4].id,
-      listingId: listings[0].id,
+    {
+      username: "demo_creator_2",
+      name: "Anaya Singh",
+      email: "creator2@demo.local",
+      gender: "female",
+      dob: "1998-07-09",
+      languages: ["english", "punjabi"],
+      title: "Beauty & Skincare",
+      description: "Skincare routines and beauty product reviews.",
+      categories: ["beauty", "skincare", "ugc"],
+      location: { district: "Delhi", statename: "Delhi" },
     },
-  })
-
-  // Create favorites
-  await prisma.favorite.create({
-    data: {
-      userId: users[4].id,
-      listingId: listings[1].id,
+    {
+      username: "demo_creator_3",
+      name: "Rohit Sharma",
+      email: "creator3@demo.local",
+      gender: "male",
+      dob: "1995-11-21",
+      languages: ["english", "hindi"],
+      title: "Fitness Coach",
+      description: "Workout routines and nutrition tips.",
+      categories: ["fitness", "sports", "health"],
+      location: { district: "Pune", statename: "Maharashtra" },
     },
-  })
+    {
+      username: "demo_creator_4",
+      name: "Isha Kapoor",
+      email: "creator4@demo.local",
+      gender: "female",
+      dob: "1997-03-04",
+      languages: ["english", "hindi"],
+      title: "Travel Creator",
+      description: "Travel guides and city explorations.",
+      categories: ["travel", "lifestyle", "food"],
+      location: { district: "Jaipur", statename: "Rajasthan" },
+    },
+    {
+      username: "demo_creator_5",
+      name: "Kabir Das",
+      email: "creator5@demo.local",
+      gender: "male",
+      dob: "1994-09-12",
+      languages: ["english", "bengali"],
+      title: "Gaming Streamer",
+      description: "Gaming clips and live streams.",
+      categories: ["gaming", "entertainment", "tech"],
+      location: { district: "Kolkata", statename: "West Bengal" },
+    },
+    {
+      username: "demo_creator_6",
+      name: "Priya Nair",
+      email: "creator6@demo.local",
+      gender: "female",
+      dob: "1999-01-19",
+      languages: ["english", "tamil"],
+      title: "Food Creator",
+      description: "Restaurant reviews and recipes.",
+      categories: ["food", "lifestyle", "travel"],
+      location: { district: "Chennai", statename: "Tamil Nadu" },
+    },
+    {
+      username: "demo_creator_7",
+      name: "Varun Khanna",
+      email: "creator7@demo.local",
+      gender: "male",
+      dob: "1993-05-28",
+      languages: ["english", "hindi"],
+      title: "Finance & Business",
+      description: "Startup tips and finance explainers.",
+      categories: ["finance", "business", "education"],
+      location: { district: "Gurugram", statename: "Haryana" },
+    },
+    {
+      username: "demo_creator_8",
+      name: "Neha Rao",
+      email: "creator8@demo.local",
+      gender: "female",
+      dob: "1996-12-02",
+      languages: ["english", "marathi"],
+      title: "Fashion Creator",
+      description: "Outfit ideas and fashion reels.",
+      categories: ["fashion", "lifestyle", "beauty"],
+      location: { district: "Mumbai", statename: "Maharashtra" },
+    },
+    {
+      username: "demo_creator_9",
+      name: "Arjun Patel",
+      email: "creator9@demo.local",
+      gender: "male",
+      dob: "1995-06-30",
+      languages: ["english", "gujarati"],
+      title: "Auto & Tech",
+      description: "Cars, bikes, and tech gadgets.",
+      categories: ["auto", "tech", "reviews"],
+      location: { district: "Ahmedabad", statename: "Gujarat" },
+    },
+    {
+      username: "demo_creator_10",
+      name: "Zoya Ali",
+      email: "creator10@demo.local",
+      gender: "female",
+      dob: "2000-04-17",
+      languages: ["english", "urdu"],
+      title: "Wellness Creator",
+      description: "Mindfulness and wellness routines.",
+      categories: ["wellness", "health", "lifestyle"],
+      location: { district: "Hyderabad", statename: "Telangana" },
+    },
+  ]
 
-  // Create feature flags
-  await Promise.all([
-    prisma.featureFlag.create({
-      data: { key: "maintenanceMode", value: false },
-    }),
-    prisma.featureFlag.create({
-      data: { key: "newUIEnabled", value: true },
-    }),
-  ])
+  for (let i = 0; i < creators.length; i += 1) {
+    const seed = creators[i]
+    const influencer = await ensureInfluencerUser(seed)
+    await ensureInfluencerProfile(influencer.id, seed, i + 1)
+    const packages = await ensurePackages(influencer.id, i + 1)
+    await ensureOrdersAndEarnings({
+      creatorUserId: influencer.id,
+      brandUserId: brand.id,
+      packages,
+    })
+    await ensureAnalytics({ creatorUserId: influencer.id, packages })
+  }
 
-  console.log("✅ Database seeded successfully!")
-  console.log("\n📝 Test Accounts:")
-  console.log("  Admin: admin@colabatr.com")
-  console.log("  Seller 1: john@colabatr.com")
-  console.log("  Seller 2: sarah@colabatr.com")
-  console.log("  Seller 3: mike@colabatr.com")
-  console.log("  Buyer: lisa@colabatr.com")
+  console.log("Seed complete: 10 creators + demo_brand")
 }
 
 main()

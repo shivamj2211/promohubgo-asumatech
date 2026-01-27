@@ -209,7 +209,7 @@ router.post("/:userId/contact", requireAuth, async (req, res) => {
         buyerId: sender.id,
         sellerId: seller.id,
         listingId: listing.id,
-        status: "pending",
+        status: { in: ["PENDING", "pending"] },
       },
     });
     if (!order) {
@@ -218,7 +218,7 @@ router.post("/:userId/contact", requireAuth, async (req, res) => {
           listingId: listing.id,
           buyerId: sender.id,
           sellerId: seller.id,
-          status: "pending",
+          status: "PENDING",
           totalPrice: 0,
         },
       });

@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 type Package = {
   id: string;
   title: string;
-  platform: "instagram" | "tiktok" | "ugc";
+  platform: string;
   price: number;
 };
 

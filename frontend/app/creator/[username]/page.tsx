@@ -20,9 +20,22 @@ type Media = {
 type Package = {
   id: string;
   title: string;
-  platform: "instagram" | "tiktok" | "ugc";
+  platform: string;
   price: number;
   description?: string | null;
+};
+
+type Analytics = {
+  packageId: string;
+  views: number;
+  clicks: number;
+  saves: number;
+  orders: number;
+};
+
+type AnalyticsResponse = {
+  ok?: boolean;
+  items?: Analytics[];
 };
 
 type PublicProfile = {
@@ -46,7 +59,7 @@ type PublicProfile = {
 export default function CreatorProfilePage({
   params,
 }: {
-  params: { id: string };
+  params: { username: string };
 }) {
   const router = useRouter();
 
@@ -55,14 +68,18 @@ export default function CreatorProfilePage({
 
   const [packages, setPackages] = useState<Package[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
+  const [analytics, setAnalytics] = useState<Record<string, Analytics>>({});
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
-  const [activePlatform, setActivePlatform] =
-    useState<"all" | "instagram" | "tiktok" | "ugc">("all");
+  const [activePlatform, setActivePlatform] = useState<string>("all");
 
   const [saved, setSaved] = useState(false);
   const hasTrackedView = useRef(false);
 
-  const isLoggedIn = Boolean(data?.user?.id);
+  const [me, setMe] = useState<{ id: string; role?: string | null; username?: string | null } | null>(
+    null
+  );
+  const isLoggedIn = Boolean(me?.id);
 
   const track = async (eventType: string, packageId?: string | null) => {
     if (!packageId) return;
@@ -76,14 +93,42 @@ export default function CreatorProfilePage({
     }
   };
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/me");
+        if (!active) return;
+        if (res?.ok && res?.user?.id) {
+          setMe({
+            id: res.user.id,
+            role: res.user.role || null,
+            username: res.user.username || null,
+          });
+        } else {
+          setMe(null);
+        }
+      } catch {
+        if (active) setMe(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   /* ================= FETCH PROFILE ================= */
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const res = await apiFetch(`/api/public/influencers/${params.id}`);
+        const res = await apiFetch(`/api/public/influencers/${params.username}`);
         if (!alive) return;
+        if (res?.shouldRedirect && res?.canonicalUsername) {
+          router.replace(`/creator/${res.canonicalUsername}`);
+          return;
+        }
         setData(res);
       } catch {
         setData(null);
@@ -94,19 +139,52 @@ export default function CreatorProfilePage({
     return () => {
       alive = false;
     };
-  }, [params.id]);
+  }, [params.username]);
 
   /* ================= FETCH PACKAGES ================= */
 
   useEffect(() => {
-    if (!params.id) return;
+    if (!params.username) return;
 
-    apiFetch(`/api/influencer-packages/public/${params.id}`)
+    apiFetch(`/api/public/packages/${params.username}`)
       .then((res) => {
         setPackages(res || []);
       })
       .catch(() => setPackages([]));
-  }, [params.id]);
+  }, [params.username]);
+
+  useEffect(() => {
+    if (!params.username) return;
+    let active = true;
+    (async () => {
+      try {
+        setAnalyticsLoading(true);
+        const res = (await apiFetch(
+          `/api/analytics/packages/${params.username}`
+        )) as AnalyticsResponse;
+        if (!active) return;
+        const items: Analytics[] = Array.isArray(res?.items) ? res.items : [];
+        const map = items.reduce<Record<string, Analytics>>((acc, item) => {
+          acc[item.packageId] = {
+            packageId: item.packageId,
+            views: item.views || 0,
+            clicks: item.clicks || 0,
+            saves: item.saves || 0,
+            orders: item.orders || 0,
+          };
+          return acc;
+        }, {});
+        setAnalytics(map);
+      } catch {
+        if (active) setAnalytics({});
+      } finally {
+        if (active) setAnalyticsLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [params.username]);
 
   useEffect(() => {
     if (!selectedPackage && packages.length) {
@@ -125,14 +203,14 @@ export default function CreatorProfilePage({
 
   useEffect(() => {
     const savedList = JSON.parse(localStorage.getItem("wishlist") || "[]");
-    setSaved(savedList.includes(params.id));
-  }, [params.id]);
+    setSaved(savedList.includes(params.username));
+  }, [params.username]);
 
   const toggleSave = () => {
     const list = JSON.parse(localStorage.getItem("wishlist") || "[]");
     const updated = saved
-      ? list.filter((id: string) => id !== params.id)
-      : [...list, params.id];
+      ? list.filter((id: string) => id !== params.username)
+      : [...list, params.username];
     localStorage.setItem("wishlist", JSON.stringify(updated));
     setSaved(!saved);
     if (!saved) {
@@ -150,10 +228,43 @@ export default function CreatorProfilePage({
     return imgs.slice(0, 6);
   }, [data]);
 
+  const platformTabs = useMemo(() => {
+    const unique = Array.from(
+      new Set(
+        packages
+          .map((p) => String(p.platform || "").trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    return ["all", ...unique];
+  }, [packages]);
+
   const visiblePackages =
     activePlatform === "all"
       ? packages
-      : packages.filter((p) => p.platform === activePlatform);
+      : packages.filter(
+          (p) =>
+            String(p.platform || "").trim().toLowerCase() ===
+            activePlatform
+        );
+
+  useEffect(() => {
+    if (!platformTabs.includes(activePlatform)) {
+      setActivePlatform("all");
+    }
+  }, [platformTabs, activePlatform]);
+
+  const canSeeAnalytics =
+    me?.role === "BRAND" ||
+    (me?.username && data?.user?.username && me.username === data.user.username);
+
+  const selectedAnalytics = selectedPackage
+    ? analytics[selectedPackage.id]
+    : null;
+  const conversionRate =
+    selectedAnalytics && selectedAnalytics.clicks > 0
+      ? Math.round((selectedAnalytics.orders / selectedAnalytics.clicks) * 100)
+      : 0;
 
   /* ================= STATES ================= */
 
@@ -196,7 +307,7 @@ export default function CreatorProfilePage({
             <button
               onClick={() => {
                 if (!isLoggedIn) {
-                  router.push(`/login?redirect=/creator/${params.id}`);
+                  router.push(`/login?redirect=/creator/${params.username}`);
                   return;
                 }
                 toggleSave();
@@ -279,7 +390,7 @@ export default function CreatorProfilePage({
             {/* PACKAGES */}
             <Section title="Packages">
               <div className="flex gap-4 mb-4 text-sm">
-                {["all", "instagram", "tiktok", "ugc"].map((p) => (
+                {platformTabs.map((p) => (
                   <button
                     key={p}
                     onClick={() => setActivePlatform(p as any)}
@@ -291,6 +402,16 @@ export default function CreatorProfilePage({
                       ? "Instagram"
                       : p === "tiktok"
                       ? "TikTok"
+                      : p === "youtube"
+                      ? "YouTube"
+                      : p === "facebook"
+                      ? "Facebook"
+                      : p === "x"
+                      ? "X (Twitter)"
+                      : p === "telegram"
+                      ? "Telegram"
+                      : p === "whatsapp"
+                      ? "WhatsApp"
                       : p}
                   </button>
                 ))}
@@ -322,6 +443,41 @@ export default function CreatorProfilePage({
               </div>
             </Section>
 
+            {canSeeAnalytics ? (
+              <Section title="Analytics">
+                {analyticsLoading ? (
+                  <div className="text-sm text-slate-500">Loading analytics...</div>
+                ) : selectedAnalytics ? (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                    <div className="border rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Views</p>
+                      <p className="font-bold text-lg">{selectedAnalytics.views}</p>
+                    </div>
+                    <div className="border rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Clicks</p>
+                      <p className="font-bold text-lg">{selectedAnalytics.clicks}</p>
+                    </div>
+                    <div className="border rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Saves</p>
+                      <p className="font-bold text-lg">{selectedAnalytics.saves}</p>
+                    </div>
+                    <div className="border rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Orders</p>
+                      <p className="font-bold text-lg">{selectedAnalytics.orders}</p>
+                    </div>
+                    <div className="border rounded-xl p-3">
+                      <p className="text-xs text-slate-500">Conversion</p>
+                      <p className="font-bold text-lg">{conversionRate}%</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-slate-500">
+                    No analytics yet for this package.
+                  </div>
+                )}
+              </Section>
+            ) : null}
+
           </div>
 
           {/* RIGHT */}
@@ -334,24 +490,21 @@ export default function CreatorProfilePage({
             <button
               onClick={async () => {
                 if (!isLoggedIn) {
-                  router.push(`/login?redirect=/creator/${params.id}`);
+                  router.push(`/login?redirect=/creator/${params.username}`);
                   return;
                 }
 
                 if (!selectedPackage) return;
 
-                const order = await apiFetch("/api/orders", {
+                await apiFetch("/api/cart/add", {
                   method: "POST",
                   body: JSON.stringify({
                     packageId: selectedPackage.id,
+                    quantity: 1,
                   }),
                 });
 
-                await track("order_created", selectedPackage.id);
-
-                console.log("Created order:", order);
-
-                router.push(`/dashboard/orders`);
+                router.push(`/checkout`);
               }}
               className="block w-full bg-pink-600 text-white text-center py-3 rounded-xl font-bold"
             >

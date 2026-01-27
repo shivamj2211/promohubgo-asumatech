@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 type Package = {
   id: string;
   title: string;
-  platform: "instagram" | "tiktok" | "ugc";
+  platform: string;
   price: number;
   description?: string | null;
 };
@@ -58,6 +58,14 @@ export default function OrdersPage() {
               {o.package.platform} - ${o.package.price}
             </p>
           )}
+          {["PENDING", "ACCEPTED"].includes(o.status) ? (
+            <a
+              href={`/checkout/${o.id}`}
+              className="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-3 py-1 text-xs font-semibold"
+            >
+              Pay Now
+            </a>
+          ) : null}
           <p className="text-xs text-slate-400">
             {new Date(o.createdAt).toLocaleString()}
           </p>
