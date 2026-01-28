@@ -41,6 +41,7 @@ export default function MyAccountPage() {
     (searchParams.get("tab") as
       | "dashboard"
       | "analytics"
+      | "orders"
       | "inbox"
       | "settings"
       | "membership"

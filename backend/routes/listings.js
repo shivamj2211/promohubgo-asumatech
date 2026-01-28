@@ -217,12 +217,26 @@ router.get("/", async (req, res) => {
             MAX(isoc.followers) AS followers,
             COALESCE(MAX(${FOLLOWERS_NUM_EXPR}), NULL) AS followers_num,
             COUNT(DISTINCT isoc.platform) AS platform_count,
+            COUNT(DISTINCT ipkg.id) AS package_count,
+            COALESCE(MIN(ipkg.price), NULL) AS min_package_price,
+            COALESCE(MAX(array_length(ip."portfolioLinks", 1)), 0) AS portfolio_count,
             ARRAY_REMOVE(ARRAY_AGG(DISTINCT ic.key), NULL) AS categories,
-            im.url AS avatar_url
+            im.url AS avatar_url,
+            sc.platform AS verified_platform,
+            sc.stats AS verified_stats,
+            sc."lastFetchedAt" AS verified_last_fetched_at
           FROM users u
           LEFT JOIN "InfluencerProfile" ip ON ip."userId" = u.id
           LEFT JOIN "InfluencerCategory" ic ON ic."userId" = u.id
           LEFT JOIN "InfluencerSocial" isoc ON isoc."userId" = u.id
+          LEFT JOIN LATERAL (
+            SELECT platform, stats, "lastFetchedAt"
+            FROM social_connections
+            WHERE "userId" = u.id AND verified = true
+            ORDER BY "lastFetchedAt" DESC NULLS LAST, "createdAt" DESC
+            LIMIT 1
+          ) sc ON true
+          LEFT JOIN "InfluencerPackage" ipkg ON ipkg."userId" = u.id AND ipkg."isActive" = true
           LEFT JOIN "UserLocation" ul ON ul."userId" = u.id
           LEFT JOIN LATERAL (
             SELECT url
@@ -232,7 +246,7 @@ router.get("/", async (req, res) => {
             LIMIT 1
           ) im ON true
           ${whereClause}
-          GROUP BY u.id, ip.title, ul.district, ul.statename, im.url
+          GROUP BY u.id, ip.title, ul.district, ul.statename, im.url, sc.platform, sc.stats, sc."lastFetchedAt"
           ${havingClause}
           ${orderClause}
           LIMIT $${params.length - 1} OFFSET $${params.length}
@@ -266,6 +280,21 @@ router.get("/", async (req, res) => {
             ? `${row.district}, ${row.statename}`
             : row.statename || row.district || null;
 
+        const verifiedStats = row.verified_stats || null
+        const verifiedPlatform = row.verified_platform || null
+        const primaryMetric =
+          verifiedPlatform === "instagram"
+            ? verifiedStats?.followersCount ?? null
+            : verifiedPlatform === "youtube"
+            ? verifiedStats?.subscribersCount ?? null
+            : null
+        const secondaryMetric =
+          verifiedPlatform === "instagram"
+            ? verifiedStats?.mediaCount ?? null
+            : verifiedPlatform === "youtube"
+            ? verifiedStats?.totalViews ?? null
+            : null
+
         return {
           id: row.id,
           type: "INFLUENCER",
@@ -275,9 +304,16 @@ router.get("/", async (req, res) => {
           avatarUrl: row.avatar_url || null,
           categories: row.categories || [],
           locationLabel,
+          verifiedSocial: Boolean(verifiedPlatform),
+          verifiedLastFetchedAt: row.verified_last_fetched_at || null,
+          verifiedPrimaryMetric: primaryMetric,
+          verifiedSecondaryMetric: secondaryMetric,
           stats: {
             followers: row.followers || null,
             platforms: Number(row.platform_count) || 0,
+            packages: Number(row.package_count) || 0,
+            startingPrice: row.min_package_price || null,
+            portfolio: Number(row.portfolio_count) || 0,
           },
         };
       });

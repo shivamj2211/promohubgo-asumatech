@@ -58,10 +58,42 @@ type PublicProfile = {
   };
   profile: {
     description?: string | null;
+    portfolioTitle?: string | null;
+    portfolioLinks?: string[];
     categories?: string[];
     socials?: Social[];
     media?: Media;
     locationLabel?: string | null;
+  };
+  boosters?: {
+    boosterPercent: number;
+    boosterLevel: string;
+    boosterScore: number;
+    completedBoosters: Array<{
+      key?: string | null;
+      title?: string | null;
+      category?: string | null;
+      points?: number | null;
+    }>;
+  } | null;
+  verified?: {
+    platforms: string[];
+    hasVerifiedSocial: boolean;
+  };
+  socialAnalytics?: {
+    tiers: {
+      public: string[];
+      connected: string[];
+      advanced: string[];
+    };
+    connections: Array<{
+      platform: string;
+      stats: any;
+      createdAt: string;
+      lastFetchedAt?: string | null;
+      fetchStatus?: string | null;
+      errorMessage?: string | null;
+    }>;
   };
 };
 
@@ -239,6 +271,13 @@ export default function CreatorProfilePage({
     return imgs.slice(0, 6);
   }, [data]);
 
+  const portfolioLinks = useMemo(() => {
+    const links = Array.isArray(data?.profile?.portfolioLinks)
+      ? data?.profile?.portfolioLinks
+      : [];
+    return links.filter((link) => String(link || "").trim());
+  }, [data]);
+
   const socialCards = useMemo(() => {
     const socials = data?.profile?.socials || [];
     return socials
@@ -248,6 +287,9 @@ export default function CreatorProfilePage({
       }))
       .filter((s) => s.key);
   }, [data]);
+
+  const showBoostersBonus =
+    data?.boosters && typeof data.boosters.boosterPercent === "number" && data.boosters.boosterPercent >= 70;
 
   const platformTabs = useMemo(() => {
     const unique = Array.from(
@@ -351,6 +393,11 @@ export default function CreatorProfilePage({
                 {data.profile.locationLabel}
               </span>
             )}
+            {data.verified?.hasVerifiedSocial ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+                Verified
+              </span>
+            ) : null}
           </div>
 
           {socialCards.length ? (
@@ -402,6 +449,11 @@ export default function CreatorProfilePage({
 
             {/* PORTFOLIO */}
             <Section title="Portfolio">
+              {data.profile.portfolioTitle ? (
+                <p className="text-sm text-slate-600 dark:text-zinc-400">
+                  {data.profile.portfolioTitle}
+                </p>
+              ) : null}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {gallery.length ? (
                   gallery.map((img, i) => (
@@ -419,6 +471,20 @@ export default function CreatorProfilePage({
                   </div>
                 )}
               </div>
+              {portfolioLinks.length ? (
+                <div className="mt-4 space-y-2 text-sm">
+                  {portfolioLinks.map((link) => (
+                    <a
+                      key={link}
+                      href={link}
+                      target="_blank"
+                      className="block rounded-xl border border-slate-200 px-3 py-2 text-slate-700 hover:bg-slate-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    >
+                      {link}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </Section>
 
             {/* ABOUT */}
@@ -553,6 +619,115 @@ export default function CreatorProfilePage({
                 </div>
               )}
             </Section>
+
+            {showBoostersBonus ? (
+              <Section title="Boosters Bonus">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                    {data?.boosters?.boosterLevel || "Boosted"}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                    {data?.boosters?.boosterPercent ?? 0}% boosted
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(data?.boosters?.completedBoosters || []).map((b) => (
+                    <span
+                      key={`${b.key || b.title}`}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700"
+                    >
+                      {b.title || b.key}
+                    </span>
+                  ))}
+                </div>
+              </Section>
+            ) : null}
+
+            {data.socialAnalytics?.connections?.length ? (
+              <Section title="Verified Social Analytics">
+                <div className="space-y-4">
+                  {data.socialAnalytics.connections.map((conn) => {
+                    const stats = conn.stats || {};
+                    return (
+                      <div key={conn.platform} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-semibold capitalize">{conn.platform}</div>
+                          <div className="text-xs text-slate-500">
+                            {conn.fetchStatus || "OK"}
+                            {conn.lastFetchedAt ? ` • Updated ${new Date(conn.lastFetchedAt).toLocaleDateString()}` : ""}
+                          </div>
+                        </div>
+                        {conn.errorMessage ? (
+                          <div className="mt-2 text-xs text-rose-600">{conn.errorMessage}</div>
+                        ) : null}
+                        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                          {stats.username ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Handle</div>
+                              <div className="font-semibold">@{stats.username}</div>
+                            </div>
+                          ) : null}
+                          {stats.channelTitle ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Channel</div>
+                              <div className="font-semibold">{stats.channelTitle}</div>
+                            </div>
+                          ) : null}
+                          {stats.followersCount !== undefined && stats.followersCount !== null ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Followers</div>
+                              <div className="font-semibold">{stats.followersCount}</div>
+                            </div>
+                          ) : null}
+                          {stats.subscribersCount !== undefined && stats.subscribersCount !== null ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Subscribers</div>
+                              <div className="font-semibold">{stats.subscribersCount}</div>
+                            </div>
+                          ) : null}
+                          {stats.totalViews !== undefined && stats.totalViews !== null ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Total Views</div>
+                              <div className="font-semibold">{stats.totalViews}</div>
+                            </div>
+                          ) : null}
+                          {stats.mediaCount !== undefined && stats.mediaCount !== null ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Posts</div>
+                              <div className="font-semibold">{stats.mediaCount}</div>
+                            </div>
+                          ) : null}
+                          {stats.videoCount !== undefined && stats.videoCount !== null ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Videos</div>
+                              <div className="font-semibold">{stats.videoCount}</div>
+                            </div>
+                          ) : null}
+                          {stats.accountType ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Account Type</div>
+                              <div className="font-semibold">{stats.accountType}</div>
+                            </div>
+                          ) : null}
+                          {stats.publishedAt ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Channel Created</div>
+                              <div className="font-semibold">{new Date(stats.publishedAt).toLocaleDateString()}</div>
+                            </div>
+                          ) : null}
+                          {stats.country ? (
+                            <div>
+                              <div className="text-xs text-slate-500">Country</div>
+                              <div className="font-semibold">{stats.country}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Section>
+            ) : null}
 
           </div>
 

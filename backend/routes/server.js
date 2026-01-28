@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const path = require("path");
 
 const citiesRouter = require("./routes/cities"); // your pincode lookup already
 const authRouter = require("./routes/auth");
@@ -12,6 +13,7 @@ const onboardingRouter = require("./routes/onboarding");
 const influencerPackagesRouter = require("./routes/influencerPackages");
 const ordersRouter = require("./routes/orders");
 const chatbotRouter = require("./routes/chatbot");
+const uploadsRouter = require("./routes/uploads");
 const app = express();
 app.use("/api/influencer-packages", influencerPackagesRouter);
 
@@ -24,7 +26,8 @@ app.use(
 );
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 app.use("/api/public", require("./routes/publicProfiles"));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -37,6 +40,7 @@ app.use("/api/brand", brandRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/chatbot", chatbotRouter);
+app.use("/api/uploads", uploadsRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => console.log(`✅ Backend running on http://localhost:${PORT}`));

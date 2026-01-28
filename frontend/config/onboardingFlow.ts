@@ -13,6 +13,10 @@ export const INFLUENCER_FLOW: OnboardingStep[] = [
   { step: 3, id: "social", title: "Social media", route: "/social-media" },
   { step: 4, id: "description", title: "Description", route: "/description" },
   { step: 5, id: "summary", title: "Summary", route: "/summary" },
+  { step: 6, id: "coverImages", title: "Cover images", route: "/cover-images" },
+  { step: 7, id: "portfolio", title: "Portfolio", route: "/portfolio" },
+  { step: 8, id: "packages", title: "Packages", route: "/creator/packages" },
+  { step: 9, id: "boosters", title: "Boosters", route: "/boosters" },
 ];
 
 export const BRAND_FLOW: OnboardingStep[] = [

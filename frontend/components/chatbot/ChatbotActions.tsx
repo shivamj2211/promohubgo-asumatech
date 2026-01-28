@@ -10,7 +10,13 @@ type Action = {
   redirectAfterLogin?: string;
 };
 
-export default function ChatbotActions({ compact = false }: { compact?: boolean }) {
+export default function ChatbotActions({
+  compact = false,
+  actions: actionsProp,
+}: {
+  compact?: boolean;
+  actions?: Action[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -84,7 +90,7 @@ export default function ChatbotActions({ compact = false }: { compact?: boolean 
     ];
   };
 
-  const actions = getActionsForPage();
+  const actions = actionsProp?.length ? actionsProp : getActionsForPage();
 
   const handleClick = async (action: Action) => {
     if (action.type === "REDIRECT" && action.url) {

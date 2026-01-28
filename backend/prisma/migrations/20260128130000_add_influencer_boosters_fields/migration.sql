@@ -1,0 +1,14 @@
+-- Add boosters fields to InfluencerProfile
+ALTER TABLE "InfluencerProfile"
+  ADD COLUMN IF NOT EXISTS "contentCapabilities" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "shootingStyles" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "editingSelf" BOOLEAN,
+  ADD COLUMN IF NOT EXISTS "editingTools" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "editingOther" TEXT,
+  ADD COLUMN IF NOT EXISTS "adExperience" TEXT,
+  ADD COLUMN IF NOT EXISTS "adCountRange" TEXT,
+  ADD COLUMN IF NOT EXISTS "adPlatforms" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "brandStrengths" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "pricingModel" TEXT,
+  ADD COLUMN IF NOT EXISTS "sampleLinks" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS "boostersConfirmed" BOOLEAN;

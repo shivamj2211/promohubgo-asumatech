@@ -11,7 +11,19 @@ router.get("/", requireAuth, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+        phone: true,
+        countryCode: true,
+        role: true,
+        isAdmin: true,
+        isLocked: true,
+        onboardingStep: true,
+        onboardingCompleted: true,
+        isPremium: true,
         influencerProfile: true,
         influencerCategories: true,
         influencerSocials: true,
@@ -307,9 +319,43 @@ router.patch("/", requireAuth, async (req, res) => {
         dob: influencerProfile.dob ?? null,
         title: influencerProfile.title ?? null,
         description: influencerProfile.description ?? null,
+        portfolioTitle: influencerProfile.portfolioTitle ?? null,
+        portfolioLinks: Array.isArray(influencerProfile.portfolioLinks)
+          ? influencerProfile.portfolioLinks.map((link) => String(link))
+          : undefined,
         languages: Array.isArray(influencerProfile.languages)
           ? influencerProfile.languages.map((lang) => String(lang))
           : undefined,
+        contentCapabilities: Array.isArray(influencerProfile.contentCapabilities)
+          ? influencerProfile.contentCapabilities.map((item) => String(item))
+          : undefined,
+        shootingStyles: Array.isArray(influencerProfile.shootingStyles)
+          ? influencerProfile.shootingStyles.map((item) => String(item))
+          : undefined,
+        editingSelf:
+          influencerProfile.editingSelf === undefined
+            ? undefined
+            : Boolean(influencerProfile.editingSelf),
+        editingTools: Array.isArray(influencerProfile.editingTools)
+          ? influencerProfile.editingTools.map((item) => String(item))
+          : undefined,
+        editingOther: influencerProfile.editingOther ?? null,
+        adExperience: influencerProfile.adExperience ?? null,
+        adCountRange: influencerProfile.adCountRange ?? null,
+        adPlatforms: Array.isArray(influencerProfile.adPlatforms)
+          ? influencerProfile.adPlatforms.map((item) => String(item))
+          : undefined,
+        brandStrengths: Array.isArray(influencerProfile.brandStrengths)
+          ? influencerProfile.brandStrengths.map((item) => String(item))
+          : undefined,
+        pricingModel: influencerProfile.pricingModel ?? null,
+        sampleLinks: Array.isArray(influencerProfile.sampleLinks)
+          ? influencerProfile.sampleLinks.map((item) => String(item))
+          : undefined,
+        boostersConfirmed:
+          influencerProfile.boostersConfirmed === undefined
+            ? undefined
+            : Boolean(influencerProfile.boostersConfirmed),
       };
 
       await prisma.influencerProfile.upsert({

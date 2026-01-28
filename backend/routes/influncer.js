@@ -7,11 +7,70 @@ const router = express.Router();
 router.patch("/profile", requireAuth, async (req, res) => {
   try {
     const { gender, dob, title, description, onboardingStep } = req.body || {};
+    const portfolioTitle = req.body?.portfolioTitle ?? req.body?.portfolio_title;
+    const portfolioLinks = req.body?.portfolioLinks ?? req.body?.portfolio_links;
+    const contentCapabilities =
+      req.body?.contentCapabilities ?? req.body?.content_capabilities;
+    const shootingStyles = req.body?.shootingStyles ?? req.body?.shooting_styles;
+    const editingSelf = req.body?.editingSelf ?? req.body?.editing_self;
+    const editingTools = req.body?.editingTools ?? req.body?.editing_tools;
+    const editingOther = req.body?.editingOther ?? req.body?.editing_other;
+    const adExperience = req.body?.adExperience ?? req.body?.ad_experience;
+    const adCountRange = req.body?.adCountRange ?? req.body?.ad_count_range;
+    const adPlatforms = req.body?.adPlatforms ?? req.body?.ad_platforms;
+    const brandStrengths = req.body?.brandStrengths ?? req.body?.brand_strengths;
+    const pricingModel = req.body?.pricingModel ?? req.body?.pricing_model;
+    const sampleLinks = req.body?.sampleLinks ?? req.body?.sample_links;
+    const boostersConfirmed = req.body?.boostersConfirmed ?? req.body?.boosters_confirmed;
     const data = {};
     if (gender !== undefined) data.gender = gender || null;
     if (dob !== undefined) data.dob = dob || null;
     if (title !== undefined) data.title = title || null;
     if (description !== undefined) data.description = description || null;
+    if (portfolioTitle !== undefined) data.portfolioTitle = portfolioTitle || null;
+    if (portfolioLinks !== undefined) {
+      data.portfolioLinks = Array.isArray(portfolioLinks)
+        ? portfolioLinks.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (contentCapabilities !== undefined) {
+      data.contentCapabilities = Array.isArray(contentCapabilities)
+        ? contentCapabilities.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (shootingStyles !== undefined) {
+      data.shootingStyles = Array.isArray(shootingStyles)
+        ? shootingStyles.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (editingSelf !== undefined) data.editingSelf = Boolean(editingSelf);
+    if (editingTools !== undefined) {
+      data.editingTools = Array.isArray(editingTools)
+        ? editingTools.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (editingOther !== undefined) data.editingOther = editingOther || null;
+    if (adExperience !== undefined) data.adExperience = adExperience || null;
+    if (adCountRange !== undefined) data.adCountRange = adCountRange || null;
+    if (adPlatforms !== undefined) {
+      data.adPlatforms = Array.isArray(adPlatforms)
+        ? adPlatforms.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (brandStrengths !== undefined) {
+      data.brandStrengths = Array.isArray(brandStrengths)
+        ? brandStrengths.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (pricingModel !== undefined) data.pricingModel = pricingModel || null;
+    if (sampleLinks !== undefined) {
+      data.sampleLinks = Array.isArray(sampleLinks)
+        ? sampleLinks.map((item) => String(item)).filter(Boolean)
+        : [];
+    }
+    if (boostersConfirmed !== undefined) {
+      data.boostersConfirmed = Boolean(boostersConfirmed);
+    }
 
     await prisma.influencerProfile.upsert({
       where: { userId: req.user.id },

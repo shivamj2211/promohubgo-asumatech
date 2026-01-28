@@ -16,6 +16,7 @@ export default function JourneyStepper({ role: roleProp, currentStep: stepProp }
   const [currentStep, setCurrentStep] = useState<number | null>(
     Number.isInteger(stepProp) ? stepProp! : null
   );
+  const [completion, setCompletion] = useState<number | null>(null);
 
   useEffect(() => {
     if (role && currentStep !== null) return;
@@ -38,6 +39,24 @@ export default function JourneyStepper({ role: roleProp, currentStep: stepProp }
     };
   }, [role, currentStep]);
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/onboarding/status");
+        if (!active) return;
+        if (res?.ok && Number.isFinite(res?.completion?.percent)) {
+          setCompletion(res.completion.percent);
+        }
+      } catch {
+        if (active) setCompletion(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const steps = useMemo(() => getOnboardingFlow(role), [role]);
   const activeStep = useMemo(() => {
     const found = steps.find((s) => s.route === pathname);
@@ -46,6 +65,20 @@ export default function JourneyStepper({ role: roleProp, currentStep: stepProp }
 
   return (
     <div className="w-full mb-6">
+      {completion !== null ? (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
+            <span>Profile completion</span>
+            <span>{completion}%</span>
+          </div>
+          <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-zinc-800">
+            <div
+              className="h-2 rounded-full bg-emerald-600 transition-all"
+              style={{ width: `${completion}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-3 overflow-x-auto pb-1">
         {steps.map((s, idx) => {
           const isCompleted = s.step < activeStep;

@@ -1,5 +1,6 @@
 export type ChatbotActionType =
   | "REDIRECT"
+  | "REQUIRE_LOGIN"
   | "REQUIRE_AUTH"
   | "UPDATE_ONBOARDING"
   | "OPEN_PACKAGE";

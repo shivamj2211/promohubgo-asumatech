@@ -39,6 +39,7 @@ export default function AccountPage() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
   const [me, setMe] = useState<any>(null);
+  const [completion, setCompletion] = useState<number | null>(null);
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -55,6 +56,8 @@ export default function AccountPage() {
   const [dob, setDob] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [portfolioTitle, setPortfolioTitle] = useState("");
+  const [portfolioLinksText, setPortfolioLinksText] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [socials, setSocials] = useState<Record<string, SocialRow>>({});
@@ -117,6 +120,24 @@ export default function AccountPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/onboarding/status");
+        if (!active) return;
+        if (res?.ok && Number.isFinite(res?.completion?.percent)) {
+          setCompletion(res.completion.percent);
+        }
+      } catch {
+        if (active) setCompletion(null);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!me) return;
     const profile = me.influencerProfile || {};
     const brand = me.brandProfile || {};
@@ -138,6 +159,10 @@ export default function AccountPage() {
     setDob(profile.dob || "");
     setTitle(profile.title || "");
     setDescription(profile.description || "");
+    setPortfolioTitle(profile.portfolioTitle || "");
+    setPortfolioLinksText(
+      Array.isArray(profile.portfolioLinks) ? profile.portfolioLinks.join("\n") : ""
+    );
     setLanguages(Array.isArray(profile.languages) ? profile.languages : []);
     setCategories(
       Array.isArray(me.influencerCategories)
@@ -281,6 +306,11 @@ export default function AccountPage() {
           title,
           description,
           languages,
+          portfolioTitle,
+          portfolioLinks: portfolioLinksText
+            .split(/[\n,]/)
+            .map((link) => link.trim())
+            .filter(Boolean),
         };
         payload.influencerCategories = categories;
         payload.influencerSocials = Object.values(profileSocials)
@@ -461,6 +491,21 @@ export default function AccountPage() {
             Manage your account, profile, and preferences.
           </p>
         </section>
+
+        {completion !== null ? (
+          <section className="rounded-2xl border border-slate-200 p-6 dark:border-zinc-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Profile completion</h2>
+              <span className="text-sm font-semibold">{completion}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-zinc-900">
+              <div
+                className="h-2 rounded-full bg-emerald-600 transition-all"
+                style={{ width: `${completion}%` }}
+              />
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-2xl border border-slate-200 p-6 dark:border-zinc-800 space-y-4">
           <div>
@@ -667,12 +712,31 @@ export default function AccountPage() {
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
                 />
               </div>
-              <div>
+              <div id="description-section">
                 <label className="text-xs font-semibold text-slate-500">Description</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Portfolio title</label>
+                <input
+                  value={portfolioTitle}
+                  onChange={(e) => setPortfolioTitle(e.target.value)}
+                  placeholder="e.g. UGC highlights"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-500">Portfolio links</label>
+                <textarea
+                  value={portfolioLinksText}
+                  onChange={(e) => setPortfolioLinksText(e.target.value)}
+                  rows={3}
+                  placeholder="Add one link per line"
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
                 />
               </div>
@@ -699,7 +763,7 @@ export default function AccountPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="categories-section">
                 <label className="text-xs font-semibold text-slate-500">Categories</label>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {categoryOptions.map((opt) => (

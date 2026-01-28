@@ -146,6 +146,15 @@ export function TopNav() {
                 >
                   Account settings
                 </Link>
+                {me.role === "INFLUENCER" && (
+                  <Link
+                    href="/boosters"
+                    onClick={() => setOpen(false)}
+                    className="block px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
+                  >
+                    Boosters
+                  </Link>
+                )}
                 <Link
                   href="/dashboard/orders"
                   onClick={() => setOpen(false)}

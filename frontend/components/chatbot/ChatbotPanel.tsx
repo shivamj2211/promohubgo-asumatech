@@ -1,12 +1,27 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ChatbotActions from "./ChatbotActions";
 import { X, Maximize2, ChevronUp } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { getOnboardingFlow, getRouteForStep, Role } from "@/config/onboardingFlow";
 
 type Message = {
   from: "bot" | "user";
   text: string;
+};
+
+type MissingItem = {
+  key: string;
+  label: string;
+  step: number;
+};
+
+type OnboardingStatus = {
+  role?: Role | null;
+  completion?: { percent?: number };
+  missing?: MissingItem[];
+  nextStep?: number | null;
 };
 
 export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
@@ -25,12 +40,57 @@ export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<OnboardingStatus | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [actionOverrides, setActionOverrides] = useState<
+    Array<{ id: string; label: string; type: "REDIRECT" | "REQUIRE_LOGIN"; url?: string; redirectAfterLogin?: string }>
+  >([]);
 
   // NEW: control quick actions visibility
   const [showActions, setShowActions] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const dynamicActions = useMemo(() => {
+    if (!status?.role) return undefined;
+    if (!status.missing || status.missing.length === 0) {
+      return [
+        {
+          id: "finish-onboarding",
+          label: "Finish onboarding",
+          type: "REQUIRE_LOGIN" as const,
+          redirectAfterLogin: "/listings",
+        },
+      ];
+    }
+    const labelMap: Record<string, string> = {
+      coverImages: "Add cover image",
+      portfolio: "Complete portfolio",
+      packages: "Create packages",
+      socials: "Add social channels",
+      description: "Write description",
+      title: "Add profile title",
+      pincode: "Update location",
+      state: "Update location",
+      district: "Update location",
+      area: "Update location",
+      hereToDo: "Complete brand info",
+      businessType: "Add business type",
+      approxBudget: "Add budget",
+      categories: "Choose categories",
+      platforms: "Choose platforms",
+    };
+    return status.missing.slice(0, 3).map((item) => {
+      const route = getRouteForStep(status.role, item.step);
+      return {
+        id: `${item.key}-${item.step}`,
+        label: labelMap[item.key] || item.label,
+        type: "REQUIRE_LOGIN" as const,
+        redirectAfterLogin: route || "/",
+      };
+    });
+  }, [status]);
 
   /* ------------------ fetch admin config ------------------ */
   useEffect(() => {
@@ -42,6 +102,29 @@ export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
       .then(res => res.json())
       .then(setConfig)
       .catch(() => {});
+  }, []);
+
+  const refreshStatus = async () => {
+    try {
+      setNeedsLogin(false);
+      await apiFetch("/api/me");
+      const res = await apiFetch("/api/onboarding/status");
+      if (res?.ok) {
+        setStatus({
+          role: res.role || null,
+          completion: res.completion || {},
+          missing: Array.isArray(res.missing) ? res.missing : [],
+          nextStep: res.nextStep ?? null,
+        });
+      }
+    } catch {
+      setStatus(null);
+      setNeedsLogin(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshStatus();
   }, []);
 
   /* ------------------ auto scroll ------------------ */
@@ -85,12 +168,27 @@ export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage }),
+          credentials: "include",
         }
       );
 
       const data = await res.json();
 
       setMessages(prev => [...prev, { from: "bot" as const, text: data.reply }]);
+      await refreshStatus();
+      if (Array.isArray(data?.suggestions)) {
+        setActionOverrides(
+          data.suggestions.map((item: any, idx: number) => ({
+            id: item.id || `${idx}-${item.label}`,
+            label: item.label,
+            type: item.type === "REDIRECT" ? "REDIRECT" : "REQUIRE_LOGIN",
+            url: item.url,
+            redirectAfterLogin: item.redirectAfterLogin,
+          }))
+        );
+      } else {
+        setActionOverrides([]);
+      }
     } catch {
       setMessages(prev => [
         ...prev,
@@ -158,6 +256,46 @@ export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
 
         {/* CHAT AREA */}
         <div className="flex-1 p-4 pt-14 space-y-3 overflow-y-auto" onScroll={e => setScrolled(e.currentTarget.scrollTop > 8)}>
+          {status?.completion?.percent !== undefined ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-gray-700 dark:bg-[#151B2C] dark:text-gray-200">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">Profile completion</span>
+                <span>{status.completion.percent}%</span>
+              </div>
+              <div className="mt-2 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800">
+                <div
+                  className="h-2 rounded-full bg-violet-600 transition-all"
+                  style={{ width: `${status.completion.percent}%` }}
+                />
+              </div>
+              {status.missing && status.missing.length ? (
+                <div className="mt-3 space-y-1">
+                  <div className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Missing
+                  </div>
+                  {status.missing.slice(0, 4).map((item) => {
+                    const steps = getOnboardingFlow(status.role);
+                    const stepTitle =
+                      steps.find((s) => s.step === item.step)?.title || `Step ${item.step}`;
+                    return (
+                      <div key={`${item.key}-${item.step}`} className="flex items-center justify-between">
+                        <span>{item.label}</span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                          {stepTitle}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-3 text-[11px] text-emerald-600">All onboarding steps completed.</div>
+              )}
+            </div>
+          ) : needsLogin ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 text-xs text-gray-700 dark:border-gray-700 dark:bg-[#151B2C] dark:text-gray-200">
+              Sign in to view your onboarding completion progress.
+            </div>
+          ) : null}
           {messages.map((m, i) => (
             <div
               key={i}
@@ -203,7 +341,7 @@ export default function ChatbotPanel({ onClose }: { onClose: () => void }) {
     }
   `}
 >
-  <ChatbotActions compact />
+  <ChatbotActions compact actions={actionOverrides.length ? actionOverrides : dynamicActions} />
 </div>
 
         ) : (

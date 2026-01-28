@@ -52,6 +52,8 @@ export default function SummaryPage() {
             onboardingStep: 5,
           }),
         })
+        router.push('/cover-images')
+        return
       }
 
       await apiFetch('/api/onboarding/complete', {

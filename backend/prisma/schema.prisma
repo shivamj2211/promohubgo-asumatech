@@ -28,6 +28,10 @@ model User {
   passwordHash            String?              @map("password_hash")
   isLocked                Boolean              @default(false)
   isPremium               Boolean?             @default(false) @map("is_premium")
+  boosterScore            Int                  @default(0)
+  boosterPercent          Int                  @default(0)
+  boosterLevel            String               @default("Starter Boost")
+  boosterUpdatedAt        DateTime?
   accounts                Account[]
   auditLogs               AuditLog[]
   brandCategories         BrandCategory[]
@@ -59,6 +63,9 @@ model User {
   creatorProposals        Proposal[]           @relation("CreatorProposals")
   proposalMessages        ProposalMessage[]
   creatorEarnings         CreatorEarning[]
+  boosters                UserBooster[]
+  socialConnections       SocialConnection[]
+  socialStatsSnapshots    SocialStatsSnapshot[]
 
   @@map("users")
 }
@@ -328,6 +335,20 @@ model InfluencerProfile {
   languages   String[] @default([])
   title       String?
   description String?
+  portfolioTitle String?
+  portfolioLinks String[] @default([])
+  contentCapabilities String[] @default([])
+  shootingStyles      String[] @default([])
+  editingSelf         Boolean?
+  editingTools        String[] @default([])
+  editingOther        String?
+  adExperience        String?
+  adCountRange        String?
+  adPlatforms         String[] @default([])
+  brandStrengths      String[] @default([])
+  pricingModel        String?
+  sampleLinks         String[] @default([])
+  boostersConfirmed   Boolean?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -359,6 +380,45 @@ model InfluencerSocial {
   @@unique([userId, platform])
   @@index([userId])
   @@index([platform])
+}
+
+model SocialConnection {
+  id            String   @id @default(cuid())
+  userId        String
+  platform      String
+  accountId     String?
+  accessToken   String?
+  refreshToken  String?
+  expiresAt     DateTime?
+  stats         Json?
+  verified      Boolean  @default(false)
+  lastFetchedAt DateTime?
+  fetchStatus   String   @default("OK")
+  errorMessage  String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@index([platform])
+  @@map("social_connections")
+}
+
+model SocialStatsSnapshot {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String
+  stats     Json
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([platform])
+  @@map("social_stats_snapshots")
 }
 
 model BrandProfile {
@@ -660,4 +720,46 @@ enum AnalyticsEventType {
   CLICK
   SAVE
   ORDER
+}
+
+enum BoosterStatus {
+  locked
+  available
+  completed
+}
+
+model Booster {
+  id          String       @id @default(cuid())
+  key         String       @unique // "connect-instagram", "portfolio", etc.
+  title       String
+  description String
+  category    String       // "Verification" | "Profile Power" etc (string is easier)
+  points      Int          @default(0)
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  userBoosters UserBooster[]
+}
+
+model UserBooster {
+  id          String       @id @default(cuid())
+  userId      String
+  boosterId   String
+
+  status      BoosterStatus @default(available)
+  completedAt DateTime?
+  meta        Json?         // store extra: connectedAccountId, links, etc.
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booster     Booster       @relation(fields: [boosterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, boosterId]) // idempotent: one booster per user
+  @@index([userId])
+  @@index([boosterId])
 }

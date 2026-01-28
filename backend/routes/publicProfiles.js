@@ -294,6 +294,45 @@ async function buildPublicProfile(userId, preferredType) {
   const locationLabel = buildLocationLabel(location);
 
   if (role === "INFLUENCER") {
+    let boostersSummary = null;
+    let completedBoosters = [];
+    let verifiedPlatforms = [];
+    try {
+      const boosterUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          boosterPercent: true,
+          boosterLevel: true,
+          boosterScore: true,
+        },
+      });
+      const userBoosters = await prisma.userBooster.findMany({
+        where: { userId, status: "completed", booster: { isActive: true } },
+        include: { booster: true },
+        orderBy: { booster: { sortOrder: "asc" } },
+      });
+      const connections = await prisma.socialConnection.findMany({
+        where: { userId, verified: true },
+        select: { platform: true },
+      });
+      boostersSummary = {
+        boosterPercent: boosterUser?.boosterPercent ?? 0,
+        boosterLevel: boosterUser?.boosterLevel ?? "Starter Boost",
+        boosterScore: boosterUser?.boosterScore ?? 0,
+      };
+      completedBoosters = userBoosters.map((ub) => ({
+        key: ub.booster?.key,
+        title: ub.booster?.title,
+        category: ub.booster?.category,
+        points: ub.booster?.points,
+      }));
+      verifiedPlatforms = connections.map((c) => c.platform).filter(Boolean);
+    } catch {
+      boostersSummary = null;
+      completedBoosters = [];
+      verifiedPlatforms = [];
+    }
+
     const [profileRes, categoriesRes, socialsRes, mediaRes] = await Promise.all([
       pool.query(
         `
@@ -372,6 +411,35 @@ async function buildPublicProfile(userId, preferredType) {
         media,
         locationLabel,
         platforms: platforms || [],
+      },
+      boosters: boostersSummary
+        ? {
+            ...boostersSummary,
+            completedBoosters,
+          }
+        : null,
+      verified: {
+        platforms: verifiedPlatforms,
+        hasVerifiedSocial: verifiedPlatforms.length > 0,
+      },
+      socialAnalytics: {
+        tiers: {
+          public: ["platform", "handle", "url", "verified", "connectedAt", "lastFetchedAt", "fetchStatus"],
+          connected: ["followersCount", "mediaCount", "subscribersCount", "totalViews", "videoCount", "channelTitle"],
+          advanced: ["reach", "impressions", "profileViews", "audienceBreakdown", "avgViewsPerVideo"],
+        },
+        connections: await prisma.socialConnection.findMany({
+          where: { userId, verified: true },
+          orderBy: { lastFetchedAt: "desc" },
+          select: {
+            platform: true,
+            stats: true,
+            createdAt: true,
+            lastFetchedAt: true,
+            fetchStatus: true,
+            errorMessage: true,
+          },
+        }),
       },
       stats: {
         platforms: socialsRes.rows.length ? new Set(socialsRes.rows.map((s) => s.platform)).size : 0,

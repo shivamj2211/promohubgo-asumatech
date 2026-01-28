@@ -8,6 +8,7 @@ const nav = [
   { href: "/myaccount?tab=analytics", label: "Analytics", id: "analytics" },
   { href: "/myaccount?tab=orders", label: "Orders History", id: "orders" },
   { href: "/myaccount?tab=inbox", label: "Inbox", id: "inbox" },
+  { href: "/myaccount/boosters", label: "Boosters", id: "boosters" },
   { href: "/myaccount?tab=settings", label: "Account Settings", id: "settings" },
   { href: "/myaccount?tab=membership", label: "Manage Membership", id: "membership" },
 ] as const;
@@ -18,6 +19,7 @@ export default function MyAccountSidebar() {
 
   const tab = (params.get("tab") || "dashboard") as (typeof nav)[number]["id"];
   const onSavedSearches = pathname === "/myaccount/saved-searches";
+  const onBoosters = pathname === "/myaccount/boosters";
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -25,7 +27,7 @@ export default function MyAccountSidebar() {
 
       <div className="mt-4 space-y-1">
         {nav.map((item) => {
-          const active = !onSavedSearches && tab === item.id;
+          const active = item.id === "boosters" ? onBoosters : !onSavedSearches && tab === item.id;
           return (
             <Link
               key={item.href}

@@ -91,6 +91,8 @@ async function buildPublicProfile(userId: string, preferredType?: "influencer" |
       profile: {
         title: profile?.title || null,
         description: profile?.description || null,
+        portfolioTitle: profile?.portfolioTitle || null,
+        portfolioLinks: profile?.portfolioLinks || [],
         languages: profile?.languages || [],
         categories: categories.map((cat) => cat.key),
         socials: socialsMapped,

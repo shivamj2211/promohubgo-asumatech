@@ -17,9 +17,16 @@ type ListingItem = {
   avatarUrl?: string | null
   categories?: string[]
   locationLabel?: string | null
+  verifiedSocial?: boolean
+  verifiedLastFetchedAt?: string | null
+  verifiedPrimaryMetric?: number | string | null
+  verifiedSecondaryMetric?: number | string | null
   stats?: {
     followers?: string | null
     platforms?: number | null
+    packages?: number | null
+    startingPrice?: number | null
+    portfolio?: number | null
     businessType?: string | null
     budgetRange?: string | null
   }
@@ -1321,9 +1328,16 @@ useEffect(() => {
                         ) : null}
                       </div>
 
-                      <span className="shrink-0 text-xs font-bold rounded-full bg-slate-100 dark:bg-zinc-800 px-3 py-1">
-                        {it.type === 'INFLUENCER' ? 'Influencer' : 'Brand'}
-                      </span>
+                      <div className="shrink-0 flex flex-col items-end gap-1">
+                        <span className="text-xs font-bold rounded-full bg-slate-100 dark:bg-zinc-800 px-3 py-1">
+                          {it.type === 'INFLUENCER' ? 'Influencer' : 'Brand'}
+                        </span>
+                        {it.type === 'INFLUENCER' && it.verifiedSocial ? (
+                          <span className="text-[11px] font-semibold rounded-full bg-emerald-50 text-emerald-700 px-3 py-1">
+                            Verified
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -1340,6 +1354,17 @@ useEffect(() => {
                     <div className="mt-3 text-sm text-slate-600 dark:text-zinc-300">
                       {it.locationLabel ? `📍 ${it.locationLabel}` : null}
                     </div>
+                    {it.type === 'INFLUENCER' && it.verifiedSocial ? (
+                      <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                        Verified • {it.verifiedPrimaryMetric ?? '—'}
+                        {it.verifiedSecondaryMetric !== null && it.verifiedSecondaryMetric !== undefined
+                          ? ` • ${it.verifiedSecondaryMetric}`
+                          : ''}
+                        {it.verifiedLastFetchedAt
+                          ? ` • Updated ${new Date(it.verifiedLastFetchedAt).toLocaleDateString()}`
+                          : ''}
+                      </div>
+                    ) : null}
 
                     <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                       {it.type === 'INFLUENCER' ? (
@@ -1351,6 +1376,21 @@ useEffect(() => {
                           <div className="rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-3">
                             <div className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Platforms</div>
                             <div className="font-extrabold">{it.stats?.platforms ?? '—'}</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-3">
+                            <div className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Packages</div>
+                            <div className="font-extrabold">
+                              {it.stats?.packages ?? '—'}
+                            </div>
+                            {it.stats?.startingPrice ? (
+                              <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                                From ${it.stats.startingPrice}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-3">
+                            <div className="text-xs font-semibold text-slate-500 dark:text-zinc-400">Portfolio</div>
+                            <div className="font-extrabold">{it.stats?.portfolio ?? '—'}</div>
                           </div>
                         </>
                       ) : (
