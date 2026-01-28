@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
 
 type Package = {
   id: string;
@@ -57,8 +59,10 @@ export default function EarningsPage() {
   if (loading) return <div className="p-10">Loading...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-extrabold">Your Earnings</h1>
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
+      <main className="max-w-4xl mx-auto p-6 space-y-6">
+        <h1 className="text-2xl font-extrabold">Your Earnings</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-2xl border border-slate-200 p-4">
@@ -102,6 +106,8 @@ export default function EarningsPage() {
           ))}
         </div>
       )}
+      </main>
+      <SiteFooter />
     </div>
   );
 }

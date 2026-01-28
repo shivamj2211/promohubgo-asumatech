@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
 
 type Proposal = {
   id: string;
@@ -100,13 +102,15 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
   const canChat = proposal.status === "ACCEPTED";
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold">Proposal</h1>
-        <button onClick={() => router.back()} className="text-sm underline">
-          Back
-        </button>
-      </div>
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
+      <main className="max-w-4xl mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-extrabold">Proposal</h1>
+          <button onClick={() => router.back()} className="text-sm underline">
+            Back
+          </button>
+        </div>
 
       <div className="rounded-2xl border border-slate-200 p-4 space-y-2">
         <div className="font-semibold">
@@ -183,6 +187,8 @@ export default function ProposalDetailPage({ params }: { params: { id: string } 
           <div className="text-xs text-slate-500">Chat unlocks after acceptance.</div>
         )}
       </div>
+      </main>
+      <SiteFooter />
     </div>
   );
 }

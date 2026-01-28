@@ -6,6 +6,7 @@ import { useSearchParams, usePathname } from "next/navigation";
 const nav = [
   { href: "/myaccount?tab=dashboard", label: "Dashboard", id: "dashboard" },
   { href: "/myaccount?tab=analytics", label: "Analytics", id: "analytics" },
+  { href: "/myaccount?tab=orders", label: "Orders History", id: "orders" },
   { href: "/myaccount?tab=inbox", label: "Inbox", id: "inbox" },
   { href: "/myaccount?tab=settings", label: "Account Settings", id: "settings" },
   { href: "/myaccount?tab=membership", label: "Manage Membership", id: "membership" },

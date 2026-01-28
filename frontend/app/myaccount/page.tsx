@@ -21,6 +21,20 @@ type Me = {
   isPremium?: boolean | null;
 };
 
+type OrderItem = {
+  id: string;
+  status: string;
+  listingId: string;
+  createdAt: string;
+  totalPrice?: number;
+  package?: {
+    id: string;
+    title: string;
+    platform: string;
+    price: number;
+  } | null;
+};
+
 export default function MyAccountPage() {
   const searchParams = useSearchParams();
   const active =
@@ -34,6 +48,7 @@ export default function MyAccountPage() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,14 +56,20 @@ export default function MyAccountPage() {
     (async () => {
       try {
         setLoading(true);
-        const [meRes, threadsRes] = await Promise.all([apiFetch("/api/me"), apiFetch("/api/threads")]);
+        const [meRes, threadsRes, ordersRes] = await Promise.all([
+          apiFetch("/api/me"),
+          apiFetch("/api/threads"),
+          apiFetch("/api/orders/mine"),
+        ]);
         if (!activeRequest) return;
         setMe(meRes?.user || null);
         setThreads(Array.isArray(threadsRes?.data) ? threadsRes.data : []);
+        setOrders(Array.isArray(ordersRes) ? ordersRes : []);
       } catch {
         if (activeRequest) {
           setMe(null);
           setThreads([]);
+          setOrders([]);
         }
       } finally {
         if (activeRequest) setLoading(false);
@@ -194,6 +215,41 @@ export default function MyAccountPage() {
               ))
             ) : (
               <p className="text-sm text-slate-500 dark:text-zinc-400">Your inbox is empty.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {active === "orders" ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-extrabold">Orders History</h2>
+            <Link href="/dashboard/orders" className="text-sm font-semibold text-emerald-600 hover:underline">
+              Open full orders
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {orders.length ? (
+              orders.map((order) => (
+                <div
+                  key={order.id}
+                  className="rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-zinc-800"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold">
+                      {order.package?.title || "Package"} · {order.package?.platform || "platform"}
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {order.status}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Order #{order.id.slice(0, 8)} · {new Date(order.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-zinc-400">No orders yet.</p>
             )}
           </div>
         </div>

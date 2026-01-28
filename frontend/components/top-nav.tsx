@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { ShoppingCart } from "lucide-react";
 
 /**
  * TopNav shows the PromoHubGo brand and either sign-in/sign-up buttons
@@ -26,6 +27,8 @@ export function TopNav() {
 
   const [me, setMe] = useState<Me | null>(null);
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +47,27 @@ export function TopNav() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!open) return;
+      if (menuRef.current?.contains(target)) return;
+      if (buttonRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
   async function handleLogout() {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
@@ -56,11 +80,11 @@ export function TopNav() {
   }
 
   return (
-    <nav className="border-b border-gray-200 bg-white/80 backdrop-blur sticky top-0 z-50 dark:border-zinc-800 dark:bg-zinc-950/70">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <nav className="border-b border-slate-200/70 bg-white/80 backdrop-blur sticky top-0 z-50 dark:border-zinc-800/80 dark:bg-zinc-950/70">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center gap-4">
         <Link
           href="/"
-          className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent"
+          className="text-2xl font-extrabold bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 bg-clip-text text-transparent tracking-tight"
         >
           PromoHubGo
         </Link>
@@ -68,28 +92,30 @@ export function TopNav() {
           <div className="flex gap-3">
             <Link
               href="/login"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
             >
               Sign In
             </Link>
             <Link
               href="/signup"
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+              className="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800"
             >
               Join Now
             </Link>
           </div>
         ) : (
-          <div className="relative flex items-center gap-3">
+          <div className="relative flex items-center gap-3" ref={menuRef}>
             <Link
               href="/checkout"
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold hover:bg-slate-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900"
             >
+              <ShoppingCart className="h-4 w-4" />
               Cart
             </Link>
             <button
               onClick={() => setOpen((v) => !v)}
-              className="h-10 w-10 rounded-full border border-gray-300 bg-white flex items-center justify-center dark:border-zinc-800 dark:bg-zinc-950"
+              ref={buttonRef}
+              className="h-10 w-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shadow-sm hover:shadow-md transition dark:border-zinc-800 dark:bg-zinc-950"
               title="Account"
             >
               <span className="text-sm font-semibold">
@@ -97,8 +123,8 @@ export function TopNav() {
               </span>
             </button>
             {open && (
-              <div className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden dark:border-zinc-800 dark:bg-zinc-950">
-                <div className="px-4 py-3 text-sm border-b border-gray-100 dark:border-zinc-800">
+              <div className="absolute right-0 top-full mt-3 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="px-4 py-3 text-sm border-b border-slate-100 dark:border-zinc-800">
                   <div className="font-semibold truncate">
                     {me.username || "User"}
                   </div>
@@ -109,28 +135,35 @@ export function TopNav() {
                 <Link
                   href="/myaccount"
                   onClick={() => setOpen(false)}
-                  className="block px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"
+                  className="block px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
                 >
                   My account
                 </Link>
                 <Link
                   href="/account"
                   onClick={() => setOpen(false)}
-                  className="block px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"
+                  className="block px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
                 >
                   Account settings
+                </Link>
+                <Link
+                  href="/dashboard/orders"
+                  onClick={() => setOpen(false)}
+                  className="block px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
+                >
+                  Orders History
                 </Link>
                 {me.isAdmin && (
                   <Link
                     href="/admin"
                     onClick={() => setOpen(false)}
-                    className="block px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"
+                    className="block px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
                   >
                     Admin panel
                   </Link>
                 )}
                 <div
-                  className="flex px-4 py-3 text-sm items-center justify-between border-t border-gray-100 dark:border-zinc-800"
+                  className="flex px-4 py-3 text-sm items-center justify-between border-t border-slate-100 dark:border-zinc-800"
                 >
                   <span>Premium</span>
                   <span className="font-semibold">
@@ -138,7 +171,7 @@ export function TopNav() {
                   </span>
                 </div>
                 <button
-                  className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900"
+                  className="w-full text-left px-4 py-3 text-sm hover:bg-slate-50 dark:hover:bg-zinc-900"
                   onClick={handleLogout}
                 >
                   Logout

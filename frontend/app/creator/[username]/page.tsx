@@ -3,12 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
+import {
+  Facebook,
+  Instagram,
+  MessageCircle,
+  Send,
+  Twitter,
+  Youtube,
+} from "lucide-react";
 
 /* ================= TYPES ================= */
 
 type Social = {
   platform: string;
   username?: string | null;
+  followers?: string | null;
   url?: string | null;
 };
 
@@ -228,6 +239,16 @@ export default function CreatorProfilePage({
     return imgs.slice(0, 6);
   }, [data]);
 
+  const socialCards = useMemo(() => {
+    const socials = data?.profile?.socials || [];
+    return socials
+      .map((s) => ({
+        ...s,
+        key: String(s.platform || "").toLowerCase(),
+      }))
+      .filter((s) => s.key);
+  }, [data]);
+
   const platformTabs = useMemo(() => {
     const unique = Array.from(
       new Set(
@@ -254,10 +275,6 @@ export default function CreatorProfilePage({
     }
   }, [platformTabs, activePlatform]);
 
-  const canSeeAnalytics =
-    me?.role === "BRAND" ||
-    (me?.username && data?.user?.username && me.username === data.user.username);
-
   const selectedAnalytics = selectedPackage
     ? analytics[selectedPackage.id]
     : null;
@@ -275,6 +292,7 @@ export default function CreatorProfilePage({
 
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
       <div className="mx-auto max-w-7xl px-4 py-6">
 
         {/* ===== TOP BAR ===== */}
@@ -320,11 +338,60 @@ export default function CreatorProfilePage({
         </div>
 
         {/* ===== HEADER ===== */}
-        <h1 className="text-3xl font-extrabold">{data.user.name}</h1>
+        <div className="rounded-3xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+          <h1 className="text-3xl font-extrabold">{data.user.name}</h1>
+          <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-600 dark:text-zinc-400">
+            {data.user.username && (
+              <span className="rounded-full border border-slate-200 px-3 py-1 text-xs dark:border-zinc-800">
+                @{data.user.username}
+              </span>
+            )}
+            {data.profile.locationLabel && (
+              <span className="rounded-full border border-slate-200 px-3 py-1 text-xs dark:border-zinc-800">
+                {data.profile.locationLabel}
+              </span>
+            )}
+          </div>
 
-        <div className="mt-2 flex flex-wrap gap-2 text-sm text-slate-600 dark:text-zinc-400">
-          {data.profile.locationLabel && <span>{data.profile.locationLabel}</span>}
-          {data.user.username && <span>- @{data.user.username}</span>}
+          {socialCards.length ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {socialCards.map((s) => (
+                <a
+                  key={s.platform}
+                  href={s.url || "#"}
+                  target="_blank"
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-zinc-900 dark:text-zinc-200">
+                    {s.key === "instagram" ? (
+                      <Instagram className="h-5 w-5" />
+                    ) : s.key === "youtube" ? (
+                      <Youtube className="h-5 w-5" />
+                    ) : s.key === "facebook" ? (
+                      <Facebook className="h-5 w-5" />
+                    ) : s.key === "x" ? (
+                      <Twitter className="h-5 w-5" />
+                    ) : s.key === "telegram" ? (
+                      <Send className="h-5 w-5" />
+                    ) : s.key === "whatsapp" ? (
+                      <MessageCircle className="h-5 w-5" />
+                    ) : (
+                      <Instagram className="h-5 w-5" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-semibold capitalize">
+                      {s.key === "x" ? "X (Twitter)" : s.platform}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-zinc-400">
+                      {s.followers ? `${s.followers} followers` : "Followers hidden"}
+                      {s.username ? ` · @${s.username}` : ""}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {/* ===== GRID ===== */}
@@ -333,8 +400,8 @@ export default function CreatorProfilePage({
           {/* LEFT */}
           <div className="space-y-6">
 
-            {/* GALLERY */}
-            <div className="border rounded-2xl p-3 dark:border-zinc-800">
+            {/* PORTFOLIO */}
+            <Section title="Portfolio">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {gallery.length ? (
                   gallery.map((img, i) => (
@@ -348,11 +415,11 @@ export default function CreatorProfilePage({
                   ))
                 ) : (
                   <div className="col-span-full h-64 flex items-center justify-center text-sm text-slate-500">
-                    No images uploaded
+                    No portfolio items yet.
                   </div>
                 )}
               </div>
-            </div>
+            </Section>
 
             {/* ABOUT */}
             <Section title="About">
@@ -375,16 +442,27 @@ export default function CreatorProfilePage({
 
             {/* SOCIALS */}
             <Section title="Socials">
-              {(data.profile.socials || []).map((s) => (
-                <a
-                  key={s.platform}
-                  href={s.url || "#"}
-                  target="_blank"
-                  className="block underline text-sm capitalize"
-                >
-                  {s.platform} {s.username && `(@${s.username})`}
-                </a>
-              ))}
+              {socialCards.length ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {socialCards.map((s) => (
+                    <a
+                      key={s.platform}
+                      href={s.url || "#"}
+                      target="_blank"
+                      className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm dark:border-zinc-800"
+                    >
+                      <span className="font-semibold capitalize">
+                        {s.key === "x" ? "X (Twitter)" : s.platform}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-zinc-400">
+                        {s.followers ? `${s.followers} followers` : "Followers hidden"}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">No socials added.</div>
+              )}
             </Section>
 
             {/* PACKAGES */}
@@ -443,40 +521,38 @@ export default function CreatorProfilePage({
               </div>
             </Section>
 
-            {canSeeAnalytics ? (
-              <Section title="Analytics">
-                {analyticsLoading ? (
-                  <div className="text-sm text-slate-500">Loading analytics...</div>
-                ) : selectedAnalytics ? (
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-                    <div className="border rounded-xl p-3">
-                      <p className="text-xs text-slate-500">Views</p>
-                      <p className="font-bold text-lg">{selectedAnalytics.views}</p>
-                    </div>
-                    <div className="border rounded-xl p-3">
-                      <p className="text-xs text-slate-500">Clicks</p>
-                      <p className="font-bold text-lg">{selectedAnalytics.clicks}</p>
-                    </div>
-                    <div className="border rounded-xl p-3">
-                      <p className="text-xs text-slate-500">Saves</p>
-                      <p className="font-bold text-lg">{selectedAnalytics.saves}</p>
-                    </div>
-                    <div className="border rounded-xl p-3">
-                      <p className="text-xs text-slate-500">Orders</p>
-                      <p className="font-bold text-lg">{selectedAnalytics.orders}</p>
-                    </div>
-                    <div className="border rounded-xl p-3">
-                      <p className="text-xs text-slate-500">Conversion</p>
-                      <p className="font-bold text-lg">{conversionRate}%</p>
-                    </div>
+            <Section title="Analytics">
+              {analyticsLoading ? (
+                <div className="text-sm text-slate-500">Loading analytics...</div>
+              ) : selectedAnalytics ? (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                  <div className="border rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Views</p>
+                    <p className="font-bold text-lg">{selectedAnalytics.views}</p>
                   </div>
-                ) : (
-                  <div className="text-sm text-slate-500">
-                    No analytics yet for this package.
+                  <div className="border rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Clicks</p>
+                    <p className="font-bold text-lg">{selectedAnalytics.clicks}</p>
                   </div>
-                )}
-              </Section>
-            ) : null}
+                  <div className="border rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Saves</p>
+                    <p className="font-bold text-lg">{selectedAnalytics.saves}</p>
+                  </div>
+                  <div className="border rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Orders</p>
+                    <p className="font-bold text-lg">{selectedAnalytics.orders}</p>
+                  </div>
+                  <div className="border rounded-xl p-3">
+                    <p className="text-xs text-slate-500">Conversion</p>
+                    <p className="font-bold text-lg">{conversionRate}%</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500">
+                  No analytics yet for this package.
+                </div>
+              )}
+            </Section>
 
           </div>
 
@@ -514,6 +590,7 @@ export default function CreatorProfilePage({
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   );
 }

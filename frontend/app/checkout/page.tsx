@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
 
 type Package = {
   id: string;
@@ -106,7 +108,9 @@ export default function CheckoutPage() {
   if (loading) return <div className="p-10">Loading...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
+      <main className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold">Checkout</h1>
         <button
@@ -190,6 +194,8 @@ export default function CheckoutPage() {
       >
         {submitting ? "Processing..." : "Place Order"}
       </button>
+      </main>
+      <SiteFooter />
     </div>
   );
 }

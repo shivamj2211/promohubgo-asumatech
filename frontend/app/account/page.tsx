@@ -14,6 +14,26 @@ type SocialRow = {
   url: string;
 };
 
+type PackageItem = {
+  id: string;
+  title: string;
+  platform: string;
+  price: number;
+  description?: string | null;
+  isActive: boolean;
+};
+
+const PLATFORM_OPTIONS = [
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "ugc", label: "UGC" },
+  { value: "youtube", label: "YouTube" },
+  { value: "facebook", label: "Facebook" },
+  { value: "x", label: "X (Twitter)" },
+  { value: "telegram", label: "Telegram" },
+  { value: "whatsapp", label: "WhatsApp" },
+];
+
 export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +83,19 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [usernameChanging, setUsernameChanging] = useState(false);
+  const [usernameMessage, setUsernameMessage] = useState("");
+
+  const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+  const [packageError, setPackageError] = useState("");
+  const [packageForm, setPackageForm] = useState({
+    title: "",
+    platform: "instagram",
+    price: "",
+    description: "",
+  });
+  const [packageSavingId, setPackageSavingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -181,6 +214,26 @@ export default function AccountPage() {
     };
   }, [me?.role]);
 
+  useEffect(() => {
+    if (me?.role !== "INFLUENCER") return;
+    let active = true;
+    (async () => {
+      try {
+        setPackagesLoading(true);
+        const res = await apiFetch("/api/influencer-packages/mine");
+        if (!active) return;
+        setPackages(Array.isArray(res) ? res : []);
+      } catch (e: any) {
+        if (active) setPackageError(e?.message || "Failed to load packages");
+      } finally {
+        if (active) setPackagesLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [me?.role]);
+
   const profileSocials = useMemo(() => {
     const mapped: Record<string, SocialRow> = { ...socials };
     socialOptions.forEach((opt) => {
@@ -209,7 +262,6 @@ export default function AccountPage() {
       const payload: any = {
         user: {
           name,
-          username,
           phone,
           countryCode,
         },
@@ -260,6 +312,85 @@ export default function AccountPage() {
       setError(e?.message || "Failed to save profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangeUsername() {
+    if (!username.trim()) return;
+    setUsernameMessage("");
+    setUsernameChanging(true);
+    try {
+      const res = await apiFetch("/api/me/username", {
+        method: "PATCH",
+        body: JSON.stringify({ username: username.trim().toLowerCase() }),
+      });
+      if (res?.username) setUsername(res.username);
+      setUsernameMessage("Username updated.");
+    } catch (e: any) {
+      setUsernameMessage(e?.message || "Failed to change username");
+    } finally {
+      setUsernameChanging(false);
+    }
+  }
+
+  async function createPackage() {
+    if (!packageForm.title || !packageForm.price) return;
+    setPackageError("");
+    setPackageSavingId("new");
+    try {
+      await apiFetch("/api/influencer-packages", {
+        method: "POST",
+        body: JSON.stringify({
+          title: packageForm.title,
+          platform: packageForm.platform,
+          price: Number(packageForm.price),
+          description: packageForm.description,
+        }),
+      });
+      const res = await apiFetch("/api/influencer-packages/mine");
+      setPackages(Array.isArray(res) ? res : []);
+      setPackageForm({ title: "", platform: "instagram", price: "", description: "" });
+    } catch (e: any) {
+      setPackageError(e?.message || "Failed to create package");
+    } finally {
+      setPackageSavingId(null);
+    }
+  }
+
+  async function updatePackage(pkg: PackageItem) {
+    setPackageError("");
+    setPackageSavingId(pkg.id);
+    try {
+      await apiFetch(`/api/influencer-packages/${pkg.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: pkg.title,
+          platform: pkg.platform,
+          price: Number(pkg.price),
+          description: pkg.description,
+          isActive: pkg.isActive,
+        }),
+      });
+      const res = await apiFetch("/api/influencer-packages/mine");
+      setPackages(Array.isArray(res) ? res : []);
+    } catch (e: any) {
+      setPackageError(e?.message || "Failed to update package");
+    } finally {
+      setPackageSavingId(null);
+    }
+  }
+
+  async function deletePackage(id: string) {
+    if (!confirm("Delete this package?")) return;
+    setPackageError("");
+    setPackageSavingId(id);
+    try {
+      await apiFetch(`/api/influencer-packages/${id}`, { method: "DELETE" });
+      setPackages((prev) => prev.filter((p) => p.id !== id));
+    } catch (e: any) {
+      setPackageError(e?.message || "Failed to delete package");
+    } finally {
+      setPackageSavingId(null);
     }
   }
 
@@ -347,11 +478,23 @@ export default function AccountPage() {
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-500">Username</label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
-              />
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+                <button
+                  onClick={handleChangeUsername}
+                  disabled={usernameChanging}
+                  className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {usernameChanging ? "Updating..." : "Change"}
+                </button>
+              </div>
+              {usernameMessage ? (
+                <p className="mt-2 text-xs text-slate-500">{usernameMessage}</p>
+              ) : null}
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-500">Phone</label>
@@ -742,6 +885,152 @@ export default function AccountPage() {
             {saving ? "Saving..." : "Save changes"}
           </button>
         </section>
+
+        {me.role === "INFLUENCER" ? (
+          <section className="rounded-2xl border border-slate-200 p-6 dark:border-zinc-800 space-y-4">
+            <div>
+              <h2 className="text-lg font-bold">Package management</h2>
+              <p className="text-sm text-slate-600 dark:text-zinc-400">
+                Create, edit, and manage your packages without leaving this page.
+              </p>
+            </div>
+
+            <div className="border rounded-2xl p-4 space-y-3 dark:border-zinc-800">
+              <div className="font-semibold">Create package</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <input
+                  value={packageForm.title}
+                  onChange={(e) => setPackageForm({ ...packageForm, title: e.target.value })}
+                  placeholder="Package title"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+                <select
+                  value={packageForm.platform}
+                  onChange={(e) => setPackageForm({ ...packageForm, platform: e.target.value })}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                >
+                  {PLATFORM_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={packageForm.price}
+                  onChange={(e) => setPackageForm({ ...packageForm, price: e.target.value })}
+                  placeholder="Price"
+                  type="number"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+                <input
+                  value={packageForm.description}
+                  onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
+                  placeholder="Description"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                />
+              </div>
+              <button
+                onClick={createPackage}
+                disabled={packageSavingId === "new"}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {packageSavingId === "new" ? "Creating..." : "Add package"}
+              </button>
+            </div>
+
+            {packagesLoading ? (
+              <div className="text-sm text-slate-500">Loading packages...</div>
+            ) : packages.length === 0 ? (
+              <div className="text-sm text-slate-500">No packages created yet.</div>
+            ) : (
+              <div className="space-y-3">
+                {packages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className="rounded-2xl border border-slate-200 p-4 space-y-3 dark:border-zinc-800"
+                  >
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input
+                        value={pkg.title}
+                        onChange={(e) =>
+                          setPackages((prev) =>
+                            prev.map((p) => (p.id === pkg.id ? { ...p, title: e.target.value } : p))
+                          )
+                        }
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                      />
+                      <select
+                        value={pkg.platform}
+                        onChange={(e) =>
+                          setPackages((prev) =>
+                            prev.map((p) => (p.id === pkg.id ? { ...p, platform: e.target.value } : p))
+                          )
+                        }
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                      >
+                        {PLATFORM_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={pkg.price}
+                        onChange={(e) =>
+                          setPackages((prev) =>
+                            prev.map((p) =>
+                              p.id === pkg.id ? { ...p, price: Number(e.target.value || 0) } : p
+                            )
+                          )
+                        }
+                        type="number"
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                      />
+                      <input
+                        value={pkg.description || ""}
+                        onChange={(e) =>
+                          setPackages((prev) =>
+                            prev.map((p) =>
+                              p.id === pkg.id ? { ...p, description: e.target.value } : p
+                            )
+                          )
+                        }
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => updatePackage(pkg)}
+                        disabled={packageSavingId === pkg.id}
+                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {packageSavingId === pkg.id ? "Saving..." : "Save changes"}
+                      </button>
+                      <button
+                        onClick={() =>
+                          updatePackage({ ...pkg, isActive: !pkg.isActive })
+                        }
+                        disabled={packageSavingId === pkg.id}
+                        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-zinc-800"
+                      >
+                        {pkg.isActive ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        onClick={() => deletePackage(pkg.id)}
+                        disabled={packageSavingId === pkg.id}
+                        className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 dark:border-rose-900/40"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {packageError ? <p className="text-sm text-rose-600">{packageError}</p> : null}
+          </section>
+        ) : null}
       </div>
     </div>
   );

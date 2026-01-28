@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
 
 type Package = {
   id: string;
@@ -77,8 +79,10 @@ export default function AnalyticsDashboardPage() {
   if (loading) return <div className="p-10">Loading...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-extrabold">Package Analytics</h1>
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
+      <main className="max-w-5xl mx-auto p-6 space-y-6">
+        <h1 className="text-2xl font-extrabold">Package Analytics</h1>
 
       {rows.length === 0 && (
         <p className="text-sm text-slate-500">No analytics yet.</p>
@@ -121,6 +125,8 @@ export default function AnalyticsDashboardPage() {
           </div>
         ))}
       </div>
+      </main>
+      <SiteFooter />
     </div>
   );
 }

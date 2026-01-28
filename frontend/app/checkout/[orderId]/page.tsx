@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/footer/site-footer";
 
 type Order = {
   id: string;
@@ -70,7 +72,9 @@ export default function OrderCheckoutPage({ params }: { params: { orderId: strin
   if (!order) return <div className="p-10">Order not found</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+      <TopNav />
+      <main className="max-w-3xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold">Checkout</h1>
         <button onClick={() => router.back()} className="text-sm underline">
@@ -108,6 +112,8 @@ export default function OrderCheckoutPage({ params }: { params: { orderId: strin
       >
         {payment?.status === "SUCCESS" ? "Paid" : paying ? "Processing..." : "Pay Now"}
       </button>
+      </main>
+      <SiteFooter />
     </div>
   );
 }
