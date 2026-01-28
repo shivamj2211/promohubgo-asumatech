@@ -51,7 +51,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts"
-  ],
+, "routes/chatbot.js"  ],
   "exclude": [
     "node_modules"
   ]

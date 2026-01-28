@@ -27,6 +27,9 @@ const cartRouter = require("./routes/cart");
 const proposalsRouter = require("./routes/proposals");
 const paymentsRouter = require("./routes/payments");
 const creatorEarningsRouter = require("./routes/creatorEarnings");
+const chatbotRouter = require("./routes/chatbot");
+const chatbotConfigRouter = require("./routes/chatbotConfig");
+
 const creatorAnalyticsRouter = require("./routes/creatorAnalytics");
 const app = express();
 
@@ -87,6 +90,8 @@ app.use("/api/proposals", proposalsRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/creator/earnings", creatorEarningsRouter);
 app.use("/api/creator/analytics", creatorAnalyticsRouter);
+app.use("/api/chatbot", chatbotRouter);
+app.use("/api/chatbot-config", chatbotConfigRouter);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
