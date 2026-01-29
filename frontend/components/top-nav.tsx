@@ -112,6 +112,9 @@ export function TopNav() {
               <ShoppingCart className="h-4 w-4" />
               Cart
             </Link>
+            <Link href="/brand/campaigns" className="...">
+  Campaigns
+</Link>
             <button
               onClick={() => setOpen((v) => !v)}
               ref={buttonRef}

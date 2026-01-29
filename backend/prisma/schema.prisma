@@ -8,29 +8,29 @@ datasource db {
 }
 
 model User {
-  id                      String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id                      String                   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name                    String?
-  email                   String?              @unique
+  email                   String?                  @unique
   emailVerified           DateTime?
   image                   String?
   bio                     String?
   city                    String?
-  isSeller                Boolean              @default(false)
-  isAdmin                 Boolean              @default(false)
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @default(now()) @updatedAt
-  username                String?              @unique
+  isSeller                Boolean                  @default(false)
+  isAdmin                 Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @default(now()) @updatedAt
+  username                String?                  @unique
   phone                   String?
   countryCode             String?
-  onboardingStep          Int?                 @default(0)
+  onboardingStep          Int?                     @default(0)
   role                    UserRole?
-  onboardingCompleted     Boolean              @default(false)
-  passwordHash            String?              @map("password_hash")
-  isLocked                Boolean              @default(false)
-  isPremium               Boolean?             @default(false) @map("is_premium")
-  boosterScore            Int                  @default(0)
-  boosterPercent          Int                  @default(0)
-  boosterLevel            String               @default("Starter Boost")
+  onboardingCompleted     Boolean                  @default(false)
+  passwordHash            String?                  @map("password_hash")
+  isLocked                Boolean                  @default(false)
+  isPremium               Boolean?                 @default(false) @map("is_premium")
+  boosterLevel            String                   @default("Starter Boost")
+  boosterPercent          Int                      @default(0)
+  boosterScore            Int                      @default(0)
   boosterUpdatedAt        DateTime?
   accounts                Account[]
   auditLogs               AuditLog[]
@@ -38,34 +38,39 @@ model User {
   brandMedia              BrandMedia[]
   brandPlatforms          BrandPlatform[]
   brandProfile            BrandProfile?
+  carts                   Cart[]
+  creatorEarnings         CreatorEarning[]
   favorites               Favorite[]
   influencerCategories    InfluencerCategory[]
   influencerMedia         InfluencerMedia[]
+  influencerPackages      InfluencerPackage[]
+  influencerPackageEvents InfluencerPackageEvent[]
   influencerProfile       InfluencerProfile?
   influencerSocials       InfluencerSocial[]
   messages                Message[]
-  orders                  Order[]              @relation("buyer")
+
+  // Campaign relations
+  brandCampaigns      Campaign[]
+  campaignInfluencers CampaignInfluencer[]
+
+  orders                  Order[]               @relation("buyer")
+  brandProposals          Proposal[]            @relation("BrandProposals")
+  creatorProposals        Proposal[]            @relation("CreatorProposals")
+  proposalMessages        ProposalMessage[]
   reports                 Report[]
   reviews                 Review[]
   seller                  Seller?
   sessions                Session[]
+  boosters                UserBooster[]
   userLocation            UserLocation?
   threadMessages          ThreadMessage[]
-  contactRequestsSent     ContactRequest[]     @relation("ContactRequestFrom")
-  contactRequestsReceived ContactRequest[]     @relation("ContactRequestTo")
-  threadsAsUserA          Thread[]             @relation("ThreadUserA")
-  threadsAsUserB          Thread[]             @relation("ThreadUserB")
-  user_identities         user_identities[]
-  influencerPackages      InfluencerPackage[]
-  influencerPackageEvents InfluencerPackageEvent[]
-  carts                   Cart[]
-  brandProposals          Proposal[]           @relation("BrandProposals")
-  creatorProposals        Proposal[]           @relation("CreatorProposals")
-  proposalMessages        ProposalMessage[]
-  creatorEarnings         CreatorEarning[]
-  boosters                UserBooster[]
+  contactRequestsSent     ContactRequest[]      @relation("ContactRequestFrom")
+  contactRequestsReceived ContactRequest[]      @relation("ContactRequestTo")
+  threadsAsUserA          Thread[]              @relation("ThreadUserA")
+  threadsAsUserB          Thread[]              @relation("ThreadUserB")
   socialConnections       SocialConnection[]
   socialStatsSnapshots    SocialStatsSnapshot[]
+  user_identities         user_identities[]
 
   @@map("users")
 }
@@ -169,20 +174,20 @@ model ListingTag {
 }
 
 model Order {
-  id         String    @id @default(cuid())
-  listingId  String
-  buyerId    String
-  sellerId   String
-  status     String    @default("pending")
-  totalPrice Float
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  messages   Message[]
-  buyer      User      @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
-  listing    Listing   @relation(fields: [listingId], references: [id])
-  seller     Seller    @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  listingId       String
+  buyerId         String
+  sellerId        String
+  status          String           @default("pending")
+  totalPrice      Float
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   creatorEarnings CreatorEarning[]
-  payment    Payment?
+  messages        Message[]
+  buyer           User             @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  listing         Listing          @relation(fields: [listingId], references: [id])
+  seller          Seller           @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
+  payment         Payment?
 
   @@index([buyerId])
   @@index([sellerId])
@@ -328,15 +333,17 @@ model UserLocation {
 }
 
 model InfluencerProfile {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  gender      String?
-  dob         String?
-  languages   String[] @default([])
-  title       String?
-  description String?
-  portfolioTitle String?
-  portfolioLinks String[] @default([])
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  gender              String?
+  dob                 String?
+  languages           String[] @default([])
+  title               String?
+  description         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  portfolioTitle      String?
+  portfolioLinks      String[] @default([])
   contentCapabilities String[] @default([])
   shootingStyles      String[] @default([])
   editingSelf         Boolean?
@@ -349,9 +356,7 @@ model InfluencerProfile {
   pricingModel        String?
   sampleLinks         String[] @default([])
   boostersConfirmed   Boolean?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model InfluencerCategory {
@@ -383,7 +388,7 @@ model InfluencerSocial {
 }
 
 model SocialConnection {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   userId        String
   platform      String
   accountId     String?
@@ -391,15 +396,13 @@ model SocialConnection {
   refreshToken  String?
   expiresAt     DateTime?
   stats         Json?
-  verified      Boolean  @default(false)
+  verified      Boolean   @default(false)
   lastFetchedAt DateTime?
-  fetchStatus   String   @default("OK")
+  fetchStatus   String    @default("OK")
   errorMessage  String?
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, platform])
   @@index([userId])
@@ -413,7 +416,6 @@ model SocialStatsSnapshot {
   platform  String
   stats     Json
   createdAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -551,6 +553,161 @@ model username_history {
   @@index([user_id, changed_at(sort: Desc)])
 }
 
+model InfluencerPackage {
+  id              String                      @id @default(cuid())
+  userId          String
+  title           String
+  platform        String
+  price           Float
+  description     String?
+  isActive        Boolean                     @default(true)
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+  cartItems       Cart[]
+  creatorEarnings CreatorEarning[]
+  user            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analytics       InfluencerPackageAnalytics?
+  events          InfluencerPackageEvent[]
+  proposals       Proposal[]
+
+  @@index([userId])
+  @@index([platform])
+}
+
+model InfluencerPackageAnalytics {
+  id        String            @id @default(cuid())
+  packageId String            @unique
+  views     Int               @default(0)
+  clicks    Int               @default(0)
+  saves     Int               @default(0)
+  orders    Int               @default(0)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+}
+
+model InfluencerPackageEvent {
+  id        String            @id @default(cuid())
+  packageId String
+  eventType String
+  userId    String?
+  ipAddress String?
+  sessionId String?
+  createdAt DateTime          @default(now())
+  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user      User?             @relation(fields: [userId], references: [id])
+
+  @@index([packageId])
+  @@index([eventType])
+  @@index([userId])
+}
+
+model Cart {
+  id        String            @id @default(cuid())
+  userId    String
+  packageId String
+  quantity  Int
+  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packageId])
+  @@index([userId])
+  @@index([packageId])
+}
+
+model Proposal {
+  id        String             @id @default(cuid())
+  brandId   String
+  creatorId String
+  packageId String?
+  price     Float
+  message   String
+  status    ProposalStatus     @default(PENDING)
+  createdAt DateTime           @default(now())
+  brand     User               @relation("BrandProposals", fields: [brandId], references: [id])
+  creator   User               @relation("CreatorProposals", fields: [creatorId], references: [id])
+  package   InfluencerPackage? @relation(fields: [packageId], references: [id])
+  messages  ProposalMessage[]
+}
+
+model ProposalMessage {
+  id         String   @id @default(cuid())
+  proposalId String
+  senderId   String
+  content    String
+  createdAt  DateTime @default(now())
+  proposal   Proposal @relation(fields: [proposalId], references: [id])
+  sender     User     @relation(fields: [senderId], references: [id])
+}
+
+model CreatorEarning {
+  id          String            @id @default(cuid())
+  creatorId   String
+  orderId     String
+  packageId   String
+  grossAmount Float
+  platformFee Float
+  netAmount   Float
+  createdAt   DateTime          @default(now())
+  creator     User              @relation(fields: [creatorId], references: [id])
+  order       Order             @relation(fields: [orderId], references: [id])
+  package     InfluencerPackage @relation(fields: [packageId], references: [id])
+}
+
+model Payment {
+  id          String          @id @default(cuid())
+  orderId     String          @unique
+  provider    PaymentProvider
+  providerRef String?
+  amount      Float
+  currency    String          @default("INR")
+  status      PaymentStatus   @default(PENDING)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  order       Order           @relation(fields: [orderId], references: [id])
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(cuid())
+  entity    AnalyticsEntity
+  entityId  String
+  event     AnalyticsEventType
+  createdAt DateTime           @default(now())
+
+  @@index([entity, entityId])
+}
+
+model Booster {
+  id           String        @id @default(cuid())
+  key          String        @unique
+  title        String
+  description  String
+  category     String
+  points       Int           @default(0)
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userBoosters UserBooster[]
+}
+
+model UserBooster {
+  id          String        @id @default(cuid())
+  userId      String
+  boosterId   String
+  status      BoosterStatus @default(available)
+  completedAt DateTime?
+  meta        Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  booster     Booster       @relation(fields: [boosterId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, boosterId])
+  @@index([userId])
+  @@index([boosterId])
+}
+
 enum UserRole {
   BRAND
   INFLUENCER
@@ -566,126 +723,10 @@ enum BrandMediaType {
   COVER
 }
 
-model InfluencerPackage {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  platform    String
-  price       Float
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analytics   InfluencerPackageAnalytics?
-  events      InfluencerPackageEvent[]
-  cartItems   Cart[]
-  proposals   Proposal[]
-  creatorEarnings CreatorEarning[]
-
-  @@index([userId])
-  @@index([platform])
-}
-
-model InfluencerPackageAnalytics {
-  id        String   @id @default(cuid())
-  packageId String   @unique
-  views     Int      @default(0)
-  clicks    Int      @default(0)
-  saves     Int      @default(0)
-  orders    Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-}
-
-model InfluencerPackageEvent {
-  id        String   @id @default(cuid())
-  packageId String
-  eventType String
-  userId    String?
-  ipAddress String?
-  sessionId String?
-  createdAt DateTime @default(now())
-  package   InfluencerPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([packageId])
-  @@index([eventType])
-  @@index([userId])
-}
-
-model Cart {
-  id        String             @id @default(cuid())
-  userId    String
-  packageId String
-  quantity  Int
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  package   InfluencerPackage  @relation(fields: [packageId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, packageId])
-  @@index([userId])
-  @@index([packageId])
-}
-
-
-model Proposal {
-  id          String   @id @default(cuid())
-  brandId     String
-  creatorId   String
-  packageId   String?
-  price       Float
-  message     String
-  status      ProposalStatus @default(PENDING)
-  createdAt  DateTime @default(now())
-
-  brand    User @relation("BrandProposals", fields: [brandId], references: [id])
-  creator  User @relation("CreatorProposals", fields: [creatorId], references: [id])
-  package  InfluencerPackage? @relation(fields: [packageId], references: [id])
-  messages ProposalMessage[]
-}
-
 enum ProposalStatus {
   PENDING
   ACCEPTED
   REJECTED
-}
-model ProposalMessage {
-  id         String   @id @default(cuid())
-  proposalId String
-  senderId   String
-  content    String
-  createdAt  DateTime @default(now())
-
-  proposal Proposal @relation(fields: [proposalId], references: [id])
-  sender   User     @relation(fields: [senderId], references: [id])
-}
-model CreatorEarning {
-  id          String   @id @default(cuid())
-  creatorId   String
-  orderId     String
-  packageId   String
-  grossAmount Float
-  platformFee Float
-  netAmount   Float
-  createdAt   DateTime @default(now())
-
-  creator User  @relation(fields: [creatorId], references: [id])
-  order   Order @relation(fields: [orderId], references: [id])
-  package InfluencerPackage @relation(fields: [packageId], references: [id])
-}
-model Payment {
-  id            String   @id @default(cuid())
-  orderId       String   @unique
-  provider      PaymentProvider
-  providerRef   String?
-  amount        Float
-  currency      String  @default("INR")
-  status        PaymentStatus @default(PENDING)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  order Order @relation(fields: [orderId], references: [id])
 }
 
 enum PaymentStatus {
@@ -699,15 +740,6 @@ enum PaymentProvider {
   RAZORPAY
   STRIPE
   MOCK
-}
-model AnalyticsEvent {
-  id        String   @id @default(cuid())
-  entity    AnalyticsEntity
-  entityId  String
-  event     AnalyticsEventType
-  createdAt DateTime @default(now())
-
-  @@index([entity, entityId])
 }
 
 enum AnalyticsEntity {
@@ -728,38 +760,70 @@ enum BoosterStatus {
   completed
 }
 
-model Booster {
-  id          String       @id @default(cuid())
-  key         String       @unique // "connect-instagram", "portfolio", etc.
-  title       String
-  description String
-  category    String       // "Verification" | "Profile Power" etc (string is easier)
-  points      Int          @default(0)
-  isActive    Boolean      @default(true)
-  sortOrder   Int          @default(0)
+// Campaigns: campaign, requirements, stats, and campaign-influencer link
+model Campaign {
+  id           String    @id @default(cuid())
+  brandId      String
+  name         String
+  objective    String
+  description  String?
+  platform     String
+  contentTypes String[]  @default([])
+  budgetType   String
+  minBudget    Float?
+  maxBudget    Float?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       String    @default("draft")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  requirements CampaignRequirement?
+  stats        CampaignStats?
+  influencers  CampaignInfluencer[]
 
-  userBoosters UserBooster[]
+  brand User @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
 }
 
-model UserBooster {
-  id          String       @id @default(cuid())
-  userId      String
-  boosterId   String
+model CampaignRequirement {
+  campaignId    String   @id
+  categories    String[] @default([])
+  locations     String[] @default([])
+  languages     String[] @default([])
+  minFollowers  Int?
+  maxFollowers  Int?
+  minEngagement Int?
+  gender        String?
 
-  status      BoosterStatus @default(available)
-  completedAt DateTime?
-  meta        Json?         // store extra: connectedAccountId, links, etc.
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+model CampaignStats {
+  id          String   @id @default(cuid())
+  campaignId  String   @unique
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  saves       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
 
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  booster     Booster       @relation(fields: [boosterId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+}
 
-  @@unique([userId, boosterId]) // idempotent: one booster per user
-  @@index([userId])
-  @@index([boosterId])
+model CampaignInfluencer {
+  id           String   @id @default(cuid())
+  campaignId   String
+  influencerId String
+  packageId    String?
+  status       String   @default("invited")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  influencer User     @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, influencerId])
+  @@index([influencerId])
 }
