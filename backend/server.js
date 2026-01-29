@@ -35,7 +35,7 @@ const boostersRouter = require("./routes/boosters");
 const oauthRouter = require("./routes/oauth");
 const socialRouter = require("./routes/social");
 const brandCampaignsRouter = require("./routes/brandCampaigns");
-
+const brandCampaignSuggestions = require("./routes/brandCampaignSuggestions");
 const creatorAnalyticsRouter = require("./routes/creatorAnalytics");
 const app = express();
 
@@ -104,6 +104,9 @@ app.use("/api/boosters", boostersRouter);
 app.use("/api/oauth", oauthRouter);
 app.use("/api/social", socialRouter);
 app.use("/api/brand/campaigns", brandCampaignsRouter);
+
+
+app.use("/api/brand/campaigns", brandCampaignSuggestions);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {

@@ -761,6 +761,16 @@ enum BoosterStatus {
 }
 
 // Campaigns: campaign, requirements, stats, and campaign-influencer link
+
+enum CampaignInviteStatus {
+  invited
+  applied
+  approved
+  rejected
+  completed
+  withdrawn
+}
+
 model Campaign {
   id           String    @id @default(cuid())
   brandId      String
@@ -803,9 +813,12 @@ model CampaignRequirement {
 model CampaignStats {
   id          String   @id @default(cuid())
   campaignId  String   @unique
-  impressions Int      @default(0)
+
+  views       Int      @default(0)   // profile / campaign views
   clicks      Int      @default(0)
   saves       Int      @default(0)
+  orders      Int      @default(0)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
@@ -817,13 +830,27 @@ model CampaignInfluencer {
   campaignId   String
   influencerId String
   packageId    String?
-  status       String   @default("invited")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @default(now()) @updatedAt
+
+  // ✅ status pipeline
+  status CampaignInviteStatus @default(invited)
+
+  // ✅ inbox integration
+  threadId String?
+  lastNote String?
+
+  // ✅ lifecycle timestamps
+  invitedAt   DateTime @default(now())
+  appliedAt   DateTime?
+  approvedAt  DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   influencer User     @relation(fields: [influencerId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, influencerId])
+  @@index([campaignId])
   @@index([influencerId])
 }

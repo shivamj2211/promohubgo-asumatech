@@ -174,6 +174,114 @@ router.get("/:id", async (req, res) => {
     return res.status(500).json({ ok: false, error: "Server error" });
   }
 });
+// ✅ Suggested creators (Collabstr-style matching)
+// GET /api/brand/campaigns/:id/suggested
+router.get("/:id/suggested", async (req, res) => {
+  try {
+    const brandId = req.user.id;
+    const campaignId = String(req.params.id || "");
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, brandId },
+      include: { requirements: true },
+    });
+
+    if (!campaign) return res.status(404).json({ ok: false, error: "Campaign not found" });
+
+    const r = campaign.requirements || {};
+
+    const reqCategories = Array.isArray(r.categories) ? r.categories : [];
+    const reqLanguages = Array.isArray(r.languages) ? r.languages : [];
+    const reqLocations = Array.isArray(r.locations) ? r.locations : [];
+
+    const minFollowers = r.minFollowers ?? null;
+    const maxFollowers = r.maxFollowers ?? null;
+    const reqGender = r.gender ?? null;
+
+    // Helper: parse follower strings like "10k", "12,345", "1.2M"
+    function parseFollowers(v) {
+      if (v === null || v === undefined) return 0;
+      const s = String(v).trim().toLowerCase();
+      // handle k / m
+      const num = parseFloat(s.replace(/,/g, "").replace(/[^0-9.]/g, ""));
+      if (!isFinite(num)) return 0;
+      if (s.includes("m")) return Math.round(num * 1000000);
+      if (s.includes("k")) return Math.round(num * 1000);
+      return Math.round(num);
+    }
+
+    // Fetch influencer users with related data
+    const users = await prisma.user.findMany({
+      where: {
+        role: "INFLUENCER",
+        isLocked: false,
+      },
+      take: 80,
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        city: true,
+        image: true,
+        influencerProfile: { select: { languages: true, gender: true } },
+        influencerCategories: { select: { key: true } },
+        influencerSocials: { select: { platform: true, followers: true } },
+      },
+    });
+
+    const suggested = users
+      .map((u) => {
+        const categories = (u.influencerCategories || []).map((x) => x.key).filter(Boolean);
+        const languages = (u.influencerProfile?.languages || []).filter(Boolean);
+
+        // Followers: take max across socials
+        const followerNums = (u.influencerSocials || []).map((s) => parseFollowers(s.followers));
+        const followers = followerNums.length ? Math.max(...followerNums) : 0;
+
+        // Filters (soft + safe)
+        if (minFollowers !== null && followers < Number(minFollowers)) return null;
+        if (maxFollowers !== null && followers > Number(maxFollowers)) return null;
+
+        if (reqGender && u.influencerProfile?.gender && String(u.influencerProfile.gender).toLowerCase() !== String(reqGender).toLowerCase()) {
+          return null;
+        }
+
+        if (reqLocations.length && u.city) {
+          const city = String(u.city).toLowerCase();
+          const okLoc = reqLocations.some((loc) => city.includes(String(loc).toLowerCase()));
+          if (!okLoc) return null;
+        }
+
+        // Score
+        let score = 0;
+        if (reqCategories.length) score += reqCategories.filter((c) => categories.includes(c)).length * 2;
+        if (reqLanguages.length) score += reqLanguages.filter((l) => languages.includes(l)).length;
+
+        // slight boost for having any socials connected
+        if ((u.influencerSocials || []).length) score += 1;
+
+        return {
+          id: u.id,
+          name: u.name || "Creator",
+          username: u.username || null,
+          image: u.image || null,
+          city: u.city || null,
+          followers,
+          categories,
+          languages,
+          score,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 24);
+
+    return res.json({ ok: true, suggested });
+  } catch (e) {
+    console.error("GET /api/brand/campaigns/:id/suggested ERROR:", e);
+    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
+  }
+});
 
 /** Update campaign */
 router.patch("/:id", async (req, res) => {
