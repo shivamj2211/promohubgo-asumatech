@@ -199,6 +199,39 @@ export default function BoostersPage() {
 
           <div className="mt-8 space-y-8">
             <section className="space-y-3">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-100">Boosters Completion</h2>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">
+                Select Yes or No to confirm this step and unlock 100% onboarding.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBoostersConfirmed(true)}
+                  className={`px-4 py-2 rounded-full text-xs font-semibold border ${
+                    boostersConfirmed === true
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "border-slate-200 text-slate-600 dark:border-zinc-800 dark:text-zinc-300"
+                  }`}
+                >
+                  Yes, I will complete this
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBoostersConfirmed(false)}
+                  className={`px-4 py-2 rounded-full text-xs font-semibold border ${
+                    boostersConfirmed === false
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "border-slate-200 text-slate-600 dark:border-zinc-800 dark:text-zinc-300"
+                  }`}
+                >
+                  No, not right now
+                </button>
+              </div>
+            </section>
+
+            {boostersConfirmed === true && (
+              <>
+            <section className="space-y-3">
               <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-100">
                 Content Capability (What can you actually create?)
               </h2>
@@ -462,37 +495,6 @@ export default function BoostersPage() {
               </div>
             </section>
 
-            <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-zinc-100">Boosters Completion</h2>
-              <p className="text-xs text-slate-500 dark:text-zinc-400">
-                Select Yes or No to confirm this step and unlock 100% onboarding.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBoostersConfirmed(true)}
-                  className={`px-4 py-2 rounded-full text-xs font-semibold border ${
-                    boostersConfirmed === true
-                      ? "bg-emerald-600 text-white border-emerald-600"
-                      : "border-slate-200 text-slate-600 dark:border-zinc-800 dark:text-zinc-300"
-                  }`}
-                >
-                  Yes, I completed this
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBoostersConfirmed(false)}
-                  className={`px-4 py-2 rounded-full text-xs font-semibold border ${
-                    boostersConfirmed === false
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "border-slate-200 text-slate-600 dark:border-zinc-800 dark:text-zinc-300"
-                  }`}
-                >
-                  No, not right now
-                </button>
-              </div>
-            </section>
-
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-100">
               Why complete this section?
               <div className="mt-2 text-xs text-emerald-800/90 dark:text-emerald-200">
@@ -500,6 +502,8 @@ export default function BoostersPage() {
                 increase your deal chances by up to 70% and help you command higher pricing.
               </div>
             </div>
+              </>
+            )}
 
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

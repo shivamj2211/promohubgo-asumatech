@@ -6,14 +6,18 @@ import { requireUserId } from "@/lib/requireUser";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { toUserId, listingId, message } = body || {};
+    const { toUserId, message } = body || {};
 
     if (!toUserId || !message) {
       return NextResponse.json({ ok: false, error: "toUserId and message required" }, { status: 400 });
     }
 
     const fromUserId = await requireUserId();
-    if (fromUserId === toUserId) {
+    if (!fromUserId) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (fromUserId === String(toUserId)) {
       return NextResponse.json({ ok: false, error: "Cannot contact yourself" }, { status: 400 });
     }
 
@@ -26,7 +30,6 @@ export async function POST(req: Request) {
       data: {
         fromUserId,
         toUserId: String(toUserId),
-        listingId: listingId ? String(listingId) : null,
         message: String(message).slice(0, 2000),
       },
     });
