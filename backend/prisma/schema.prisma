@@ -71,6 +71,7 @@ model User {
   socialConnections       SocialConnection[]
   socialStatsSnapshots    SocialStatsSnapshot[]
   user_identities         user_identities[]
+  notifications           Notification[]
 
   @@map("users")
 }
@@ -182,17 +183,37 @@ model Order {
   totalPrice      Float
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
+
   creatorEarnings CreatorEarning[]
   messages        Message[]
+
   buyer           User             @relation("buyer", fields: [buyerId], references: [id], onDelete: Cascade)
   listing         Listing          @relation(fields: [listingId], references: [id])
   seller          Seller           @relation("seller", fields: [sellerId], references: [id], onDelete: Cascade)
   payment         Payment?
 
+  // ✅ order categorization
+  orderType       String           @default("listing") // "listing" | "campaign"
+
+  // ✅ campaign linkage (optional)
+  campaignId      String?
+  campaignLinkId  String?          // CampaignInfluencer.id
+
+  // ✅ relations
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignLink    CampaignInfluencer? @relation(fields: [campaignLinkId], references: [id], onDelete: SetNull)
+
   @@index([buyerId])
   @@index([sellerId])
   @@index([listingId])
+
+  // ✅ new indexes
+  @@index([orderType])
+  @@index([campaignId])
+  @@index([campaignLinkId])
 }
+
+
 
 model Message {
   id        String   @id @default(cuid())
@@ -770,6 +791,10 @@ enum CampaignInviteStatus {
   completed
   withdrawn
 }
+enum OrderType {
+  listing
+  campaign
+}
 
 model Campaign {
   id           String    @id @default(cuid())
@@ -791,6 +816,9 @@ model Campaign {
   requirements CampaignRequirement?
   stats        CampaignStats?
   influencers  CampaignInfluencer[]
+  orders       Order[]
+  statsDaily   CampaignStatDaily[]
+  invoices     Invoice[]
 
   brand User @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
@@ -849,8 +877,48 @@ model CampaignInfluencer {
 
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   influencer User     @relation(fields: [influencerId], references: [id], onDelete: Cascade)
-
+  orders     Order[]
   @@unique([campaignId, influencerId])
   @@index([campaignId])
   @@index([influencerId])
 }
+model CampaignStatDaily {
+  id         String   @id @default(cuid())
+  campaignId String
+  date       DateTime // YYYY-MM-DD (normalized)
+
+  views      Int      @default(0)
+  clicks     Int      @default(0)
+  saves      Int      @default(0)
+  orders     Int      @default(0)
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+  @@index([campaignId, date])
+}
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // campaign_invite, approved, rejected, etc
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+model Invoice {
+  id          String   @id @default(cuid())
+  campaignId  String
+  brandId     String
+  totalAmount Float
+  pdfUrl      String?
+  createdAt   DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+}
+

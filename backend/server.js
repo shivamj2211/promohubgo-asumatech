@@ -37,6 +37,15 @@ const socialRouter = require("./routes/social");
 const brandCampaignsRouter = require("./routes/brandCampaigns");
 const brandCampaignSuggestions = require("./routes/brandCampaignSuggestions");
 const creatorAnalyticsRouter = require("./routes/creatorAnalytics");
+const brandCampaignInvites = require("./routes/brandCampaignInvites");
+const brandCampaignRoi = require("./routes/brandCampaignRoi");
+const creatorCampaignApply = require("./routes/creatorCampaignApply");
+const brandCampaignInvoice = require("./routes/brandCampaignInvoice");
+const brandCampaignSmartPackage = require("./routes/brandCampaignSmartPackage");
+const creatorListings = require("./routes/creatorListings");
+
+
+
 const app = express();
 
 // Basic cookie parsing middleware (avoids external dependency)
@@ -105,9 +114,14 @@ app.use("/api/oauth", oauthRouter);
 app.use("/api/social", socialRouter);
 app.use("/api/brand/campaigns", brandCampaignsRouter);
 
+app.use("/api/brand/campaigns", brandCampaignInvites);
 
 app.use("/api/brand/campaigns", brandCampaignSuggestions);
-
+app.use("/api/brand/campaigns", brandCampaignRoi);
+app.use("/api/creator/campaigns", creatorCampaignApply);
+app.use("/api/brand/campaigns", brandCampaignInvoice);
+app.use("/api/brand/campaigns", brandCampaignSmartPackage);
+app.use("/api/creators", creatorListings);
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
